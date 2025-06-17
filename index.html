@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SVGtoDisplay</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="title-area">
+      <h1>SVGtoDisplay</h1>
+    </header>
+    <div class="main-container">
+      <section id="svg-render-area" class="box svg-area"></section>
+      <div class="right-container">
+        <section id="log-area" class="box log-area"></section>
+        <section class="box input-area">
+          <p>samples ratio (%)</p>
+          <input type="number" id="sample-input" value="5" />
+          <button id="import-btn">Import</button>
+          <input
+            type="file"
+            id="file-input"
+            accept=".svg"
+            style="display: none"
+          />
+          <button id="to-triangles-btn">Triangulation</button>
+          <button id="reset-btn">reset</button>
+        </section>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@svgdotjs/svg.js@latest/dist/svg.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@svgdotjs/svg.topoly.js@latest/dist/svg.topoly.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@svgdotjs/svg.panzoom.js@latest/dist/svg.panzoom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/libtess@1.2.2/libtess.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/polygon-clipping@0.15.7/dist/polygon-clipping.umd.min.js"></script>
+    <script type="module" src="script.js"></script>
+  </body>
+</html>
