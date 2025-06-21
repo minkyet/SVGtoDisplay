@@ -2,8 +2,10 @@ import {
   toPolygons,
   toTriangles,
   xorPolygon,
-  drawTriangles,
+  drawPrimitives,
+  drawDisplay,
 } from "./geometry.js";
+import { Display, triangleToDisplay } from "./display.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   // DOM Elements
@@ -84,13 +86,26 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   triangulationBtn.addEventListener("click", () => {
+    if (!originalSVGSource) {
+      log("Original SVG not provided.");
+      return;
+    }
+
     const sampleValue = sampleInput.value;
     let polygons = toPolygons(draw, sampleValue);
-    console.log(polygons);
     polygons = xorPolygon(polygons);
-    console.log(polygons);
-    const triangles = toTriangles(polygons);
-    drawTriangles(draw, triangles);
+    const trianglePolygons = toTriangles(polygons);
+    drawPrimitives(draw, trianglePolygons);
+    const display = Display.nestedDisplay(
+      trianglePolygons.flatMap((poly) => {
+        return poly.map((triangle) => triangleToDisplay(triangle));
+      })
+    );
+    display.move([0, 0]);
+    display.scale(0.5);
+    console.log(display);
+    drawDisplay(draw, display);
+    // log(display.command());
     log(`Polygonization complete.`);
   });
 

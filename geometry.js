@@ -40,15 +40,15 @@ export function drawPolygon(draw, polygons) {
   });
 }
 
-export function drawTriangles(draw, polygons) {
+export function drawPrimitives(draw, polygons) {
   draw.clear();
 
   polygons.forEach((poly) => {
-    poly.forEach((triangle) => {
+    poly.forEach((shape) => {
       let d = "M";
-      for (let i = 0; i < triangle.length; i += 2) {
-        d += triangle[i] + "," + triangle[i + 1];
-        if (i < triangle.length - 2) d += "L";
+      for (let i = 0; i < shape.length; i += 2) {
+        d += shape[i] + "," + shape[i + 1];
+        if (i < shape.length - 2) d += "L";
       }
       d += "Z";
       const p = draw.path(d);
@@ -58,6 +58,25 @@ export function drawTriangles(draw, polygons) {
       });
     });
   });
+}
+
+export function drawDisplay(draw, display) {
+  let d = "M";
+  const vertices = display.getVertices();
+  for (let i = 0; i < vertices.length; i += 2) {
+    d += vertices[i] + "," + vertices[i + 1];
+    if (i < vertices.length - 2) d += "L";
+  }
+  d += "Z";
+  const p = draw.path(d);
+  p.fill("none").stroke({
+    width: 0.5,
+    color: "#000",
+  });
+
+  if (display.passengers.length > 0) {
+    display.passengers.forEach((passenger) => drawDisplay(draw, passenger));
+  }
 }
 
 // [1,2,3,4,5,6,7,8,9,10,11,12] -> [[1,2,3,4,5,6],[7,8,9,10,11,12]]
@@ -188,7 +207,7 @@ function triangulate(contours) {
   const startTime = Date.now();
   tessy.gluTessEndPolygon();
   const endTime = Date.now();
-  //   console.log("tesselation time: " + (endTime - startTime).toFixed(2) + "ms");
+  //     console.log("tesselation time: " + (endTime - startTime).toFixed(2) + "ms");
 
   return triangleVerts;
 }
