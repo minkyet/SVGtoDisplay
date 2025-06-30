@@ -1,4 +1,4 @@
-import { vec2, stringifyLiteral } from "./utils.js";
+import { vec2, stringifyLiteral, formatNumber } from "./utils.js";
 
 export class Display {
   constructor(position, sides) {
@@ -40,7 +40,7 @@ export class Display {
   scale(scaleFactor) {
     this.sides[0] = vec2.scale(this.sides[0], scaleFactor);
     this.sides[1] = vec2.scale(this.sides[1], scaleFactor);
-    this.translation = vec2.scale(this.translation, 0.5);
+    this.translation = vec2.scale(this.translation, scaleFactor);
 
     if (this.passengers.length > 0) {
       this.passengers.forEach((passenger) => passenger.scale(scaleFactor));
@@ -52,12 +52,12 @@ export class Display {
     return vec2.add(this.position, this.translation);
   }
 
-  // Returns transformation matrix
+  // Returns transformation matrix (invert y)
   getTransformation() {
     return [
-      [...this.sides[0], 0, this.translation[0]],
-      [...this.sides[1], 0, this.translation[1]],
-      [0, 0, this.depth, 0],
+      [this.sides[0][0], this.sides[1][0], 0, this.translation[0]],
+      [-this.sides[0][1], -this.sides[1][1], 0, -this.translation[1]],
+      [0, 0, -this.depth, 0],
       [0, 0, 0, 1],
     ];
   }
@@ -73,22 +73,23 @@ export class Display {
     ];
   }
 
-  command() {
-    return [
-      "summon",
-      this.type,
-      `${this.position[0]} ${this.position[1]} 0`,
-      stringifyLiteral(this.nbt()),
-    ].join(" ");
+  command(pos = ["~", "~", "~"]) {
+    return ["summon", this.type, pos.join(" "), stringifyLiteral(this.nbt())]
+      .join(" ")
+      .replaceAll(", ", ",")
+      .replaceAll(": ", ":");
   }
 
   nbt() {
-    return {
+    const resultNBT = {
       id: this.type,
       block_state: this.state,
       transformation: this.getTransformation().flat(),
-      Passengers: this.passengers.map((p) => p.nbt()),
     };
+    if (this.passengers.length > 0) {
+      resultNBT.Passengers = this.passengers.map((p) => p.nbt());
+    }
+    return resultNBT;
   }
 }
 

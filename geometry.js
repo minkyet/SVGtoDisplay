@@ -60,22 +60,24 @@ export function drawPrimitives(draw, polygons) {
   });
 }
 
-export function drawDisplay(draw, display) {
+export function drawDisplay(draw, display, scale = 1) {
   let d = "M";
   const vertices = display.getVertices();
   for (let i = 0; i < vertices.length; i += 2) {
-    d += vertices[i] + "," + vertices[i + 1];
+    d += vertices[i] * scale + "," + vertices[i + 1] * scale;
     if (i < vertices.length - 2) d += "L";
   }
   d += "Z";
   const p = draw.path(d);
   p.fill("none").stroke({
-    width: 0.5,
+    width: 0.1,
     color: "#000",
   });
 
   if (display.passengers.length > 0) {
-    display.passengers.forEach((passenger) => drawDisplay(draw, passenger));
+    display.passengers.forEach((passenger) =>
+      drawDisplay(draw, passenger, scale)
+    );
   }
 }
 

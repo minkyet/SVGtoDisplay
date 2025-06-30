@@ -1,64 +1,110 @@
+:host,
+.sl-theme-dark {
+    --sl-color-primary-50: var(--sl-color-pink-50);
+    --sl-color-primary-100: var(--sl-color-pink-100);
+    --sl-color-primary-200: var(--sl-color-pink-200);
+    --sl-color-primary-300: var(--sl-color-pink-300);
+    --sl-color-primary-400: var(--sl-color-pink-400);
+    --sl-color-primary-500: var(--sl-color-pink-500);
+    --sl-color-primary-600: var(--sl-color-pink-600);
+    --sl-color-primary-700: var(--sl-color-pink-700);
+    --sl-color-primary-800: var(--sl-color-pink-800);
+    --sl-color-primary-900: var(--sl-color-pink-900);
+    --sl-color-primary-950: var(--sl-color-pink-950);
+}
+
 * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+    box-sizing: border-box;
 }
 
-body, html {
-  height: 100%;
-}
 body {
-  display: flex;
-  flex-direction: column;
-  font-family: sans-serif;
+    margin: 0;
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: var(--sl-color-neutral-0);
+    color: var(--sl-color-neutral-1000);
 }
 
-.title-area {
-  padding: 16px;
-  border-bottom: 1px solid black;
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background-color: var(--sl-color-neutral-300);
+    color: white;
+}
+
+.hamburger {
+    display: none;
+    margin-right: 1rem;
+}
+
+main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+#svg-render-area {
+  flex: 1;
+  position: relative;
+  padding: 1rem;
+  overflow: hidden
+}
+
+#svg-render-area.dragging {
+  outline: 2px dashed var(--sl-color-primary-500);
+  outline-offset: -10px;
+}
+
+.svg-upload-popup {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: var(--sl-color-neutral-400);
+  color: white;
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
   text-align: center;
+  z-index: 10;
 }
 
-.main-container {
-  flex: 1;
-  display: flex;
+.svg-upload-popup.hidden {
+  display: none;
 }
 
-.box {
-  border: 1px solid black;
-  padding: 8px;
+.upload-btn {
+  color: white;
 }
 
-.svg-area {
-  flex: 2;
-  overflow: hidden;
-  cursor: grab;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.svg-area svg {
-  transform-origin: 0 0;
-  user-select: none;
+#sidebar {
+  width: 300px;
+  background-color: var(--sl-color-neutral-400);
+  padding: 1rem;
+  overflow-y: auto;
+  transition: transform 0.3s ease;
 }
 
-.right-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
+/* 모바일 대응 */
+@media (max-width: 768px) {
+  #sidebar {
+    position: fixed;
+    top: 3.5rem;
+    right: 0;
+    height: calc(100% - 3.5rem);
+    transform: translateX(100%);
+    z-index: 1000;
+  }
 
-.log-area {
-  flex: 1;
-  margin-bottom: 8px;
-  overflow: auto;
-  white-space: pre;
-}
+  #sidebar.open {
+    transform: translateX(0);
+  }
 
-.input-area {
-  flex: 1;
-  flex-direction: column;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  .hamburger {
+    display: inline-block;
+  }
 }
