@@ -3,7 +3,7 @@ import { vec2, stringifyLiteral, formatNumber } from "./utils.js";
 export class Display {
   constructor(position, sides) {
     this.type = "block_display";
-    this.state = { Name: "stone" };
+    this.state = { Name: "black_concrete" };
     this.passengers = [];
     this.uuid = undefined;
     this.sides = sides;
@@ -47,6 +47,14 @@ export class Display {
     }
   }
 
+  // Change Display's depth
+  setDepth(depth) {
+    this.depth = depth;
+    if (this.passengers.length > 0) {
+      this.passengers.forEach((passenger) => passenger.setDepth(depth));
+    }
+  }
+
   // Returns absolute position (position + translation)
   getAbsolutePosition() {
     return vec2.add(this.position, this.translation);
@@ -71,6 +79,13 @@ export class Display {
       ...vec2.add(vec2.add(absPos, this.sides[0]), this.sides[1]),
       ...vec2.add(absPos, this.sides[1]),
     ];
+  }
+
+  // Returns total display count
+  getTotalDisplayCount() {
+    return (
+      1 + this.passengers.reduce((sum, p) => sum + p.getTotalDisplayCount(), 0)
+    );
   }
 
   command(pos = ["~", "~", "~"]) {

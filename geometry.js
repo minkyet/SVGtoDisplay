@@ -1,3 +1,5 @@
+import { Display, triangleToDisplay } from "./display.js";
+
 // find hole in polygons
 export function xorPolygon(polygons) {
   if (polygons.length === 0) return [];
@@ -25,8 +27,6 @@ function sliceSamePoint(polygons) {
 }
 
 export function drawPolygon(draw, polygons) {
-  draw.clear();
-
   polygons.forEach((poly) => {
     const d = poly
       .map((ring) => `M${ring.map(([x, y]) => `${x},${y}`).join("L")}Z`)
@@ -41,8 +41,6 @@ export function drawPolygon(draw, polygons) {
 }
 
 export function drawPrimitives(draw, polygons) {
-  draw.clear();
-
   polygons.forEach((poly) => {
     poly.forEach((shape) => {
       let d = "M";
@@ -60,25 +58,38 @@ export function drawPrimitives(draw, polygons) {
   });
 }
 
-export function drawDisplay(draw, display, scale = 1) {
+export function drawDisplay(draw, display, group = undefined) {
+  group ??= draw.findOne("#display-svg") ?? draw.group().id("display-svg");
+  display.move([0, 0]);
+
   let d = "M";
   const vertices = display.getVertices();
   for (let i = 0; i < vertices.length; i += 2) {
-    d += vertices[i] * scale + "," + vertices[i + 1] * scale;
+    d += vertices[i] + "," + vertices[i + 1];
     if (i < vertices.length - 2) d += "L";
   }
   d += "Z";
   const p = draw.path(d);
-  p.fill("none").stroke({
-    width: 0.1,
-    color: "#000",
-  });
+  p.fill("none")
+    .stroke({
+      width: 0.1,
+      color: "#aff",
+    })
+    .addTo(group);
 
   if (display.passengers.length > 0) {
     display.passengers.forEach((passenger) =>
-      drawDisplay(draw, passenger, scale)
+      drawDisplay(draw, passenger, group)
     );
   }
+}
+
+export function toDisplay(trianglePolygons) {
+  return Display.nestedDisplay(
+    trianglePolygons.flatMap((poly) =>
+      poly.map((triangle) => triangleToDisplay(triangle))
+    )
+  );
 }
 
 // [1,2,3,4,5,6,7,8,9,10,11,12] -> [[1,2,3,4,5,6],[7,8,9,10,11,12]]
@@ -91,14 +102,22 @@ function splitIntoEdges(array, edges = 3) {
   return result;
 }
 
+export function getPointCount(polygons) {
+  return polygons.reduce((sum, polyline) => sum + polyline.length, 0);
+}
+
+export function getTriangleCount(triangles) {
+  return triangles.length;
+}
+
 // svg path -> polygonize -> [[[x1, y1], [x2, y2], ...], [...]]
-export function toPolygons(draw, sampleRatio) {
-  const existingGroup = draw.findOne("#polygon-result");
+export function toPolygons(draw, sampleRate) {
+  const existingGroup = draw.findOne("#polygon-svg");
   if (existingGroup) existingGroup.remove();
 
-  const polygonGroup = draw.group().id("polygon-result");
+  const polygonGroup = draw.group().id("polygon-svg");
 
-  // copy polygon
+  // copy exsiting polygon
   draw.find("polygon").forEach((poly) => {
     const points = poly.node
       .getAttribute("points")
@@ -106,11 +125,7 @@ export function toPolygons(draw, sampleRatio) {
       .split(/\s+/)
       .map((pt) => pt.split(",").map(Number));
 
-    draw
-      .polygon(points)
-      .fill("none")
-      .stroke({ width: 1, color: "#000" })
-      .addTo(polygonGroup);
+    draw.polygon(points).addTo(polygonGroup);
   });
 
   // path to polygon
@@ -129,8 +144,7 @@ export function toPolygons(draw, sampleRatio) {
     subpaths.forEach((subD) => {
       try {
         const tempPath = draw.path(subD.trim());
-        const polygon = tempPath.toPoly(`${sampleRatio}%`);
-        polygon.fill("none").stroke({ width: 1, color: "#000" });
+        const polygon = tempPath.toPoly(`${sampleRate}%`);
         polygonGroup.add(polygon);
         tempPath.remove();
       } catch (err) {
@@ -143,6 +157,7 @@ export function toPolygons(draw, sampleRatio) {
     .children()
     .filter((child) => child.type === "polygon")
     .map((polygon) => {
+      polygon.fill("none").stroke({ width: 0.5, color: "#af0" });
       const pointsStr = polygon.node.getAttribute("points")?.trim() || "";
       if (!pointsStr) return [];
       const pointsArr = pointsStr.split(/\s+/).map((pt) => {

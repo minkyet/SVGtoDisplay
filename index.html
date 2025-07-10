@@ -15,22 +15,142 @@
 
 <body>
     <header>
-        <h2 style="margin: 0;">SVGtoDisplay</h2>
-        <sl-icon-button name="list" label="Menu" class="hamburger" id="menu-toggle"></sl-icon-button>
+        <h2 class="title">SVGtoDisplay</h2>
+        <div class="header-right">
+            <sl-button variant="text" size="large" id="about-btn">About</sl-button>
+            <sl-icon-button name="list" label="Menu" class="hamburger hidden" id="menu-toggle"></sl-icon-button>
+        </div>
     </header>
+
+    <sl-dialog label="About" id="about-dialog">
+        <h3>SVGtoDisplay is minecraft tool</h3>
+        <sl-button slot="footer" variant="primary"
+            onclick="document.getElementById('about-dialog').hide()">Close</sl-button>
+    </sl-dialog>
+
+    <sl-dialog label="Replace Current SVG?" id="replace-confirm-dialog">
+        <p>
+            A different SVG file is already loaded. Loading a new file will replace the current one and discard any
+            unsaved changes.
+        </p>
+        <sl-button slot="footer" variant="default" id="cancel-replace-btn">Cancel</sl-button>
+        <sl-button slot="footer" variant="primary" id="confirm-replace-btn">Replace</sl-button>
+    </sl-dialog>
+
+    <sl-dialog label="Summon Command" id="summon-command-dialog">
+        <sl-alert variant="warning" open id="long-command-alert" class="hidden">
+            <sl-icon slot="icon" name="exclamation-triangle"></sl-icon>
+            The command length exceeds 32,767.<br />
+            You may not be able to paste into a command block.
+        </sl-alert>
+        <br />
+        <div class="command-header">
+            <p>command</p>
+            <sl-copy-button id="copy-command-btn"></sl-copy-button>
+        </div>
+        <sl-textarea id="command-text" filled></sl-textarea>
+        <sl-button slot="footer" variant="primary"
+            onclick="document.getElementById('summon-command-dialog').hide()">Close</sl-button>
+    </sl-dialog>
 
     <main>
         <section id="svg-render-area">
             <div id="svg-upload-popup" class="svg-upload-popup">
                 <p>Drop your SVG file or</p>
-                <sl-button variant="primary" id="upload-button" class="upload-btn">Upload file</sl-button>
+                <sl-button variant="primary" id="upload-btn" class="upload-btn">
+                    <sl-icon name="box-arrow-in-down" style="font-size: 24px" slot="prefix"></sl-icon>
+                    Upload file
+                </sl-button>
                 <input type="file" id="file-input" accept=".svg" hidden />
             </div>
         </section>
 
-
         <aside id="sidebar">
-            <p>Sidebar context</p>
+            <div class="sidebar-content">
+
+                <div class="sidebar-section file-info">
+                    <p id="filename-label">No file loaded</p>
+                    <sl-tooltip content="Replace to another file">
+                        <sl-button variant="primary" size="medium" circle id="reupload-btn" class="upload-btn">
+                            <sl-icon name="arrow-clockwise"></sl-icon>
+                        </sl-button>
+                    </sl-tooltip>
+                </div>
+
+                <div class="sidebar-section sample-info">
+                    <sl-range label="Sample rate" tooltip="top" id="samplerate-slider" min="0.25" max="10" step="0.25"
+                        value="5" tooltip></sl-range>
+
+                    <sl-button id="resample-btn" variant="primary" size="medium">
+                        <sl-icon name="columns-gap" slot="prefix"></sl-icon>
+                        Convert to Display
+                    </sl-button>
+
+                    <div class="sample-results">
+                        <div>vertices: <span id="vertice-count">?</span></div>
+                        <div>triangles: <span id="triangle-count">?</span></div>
+                        <div>displays: <span id="display-count">?</span></div>
+                    </div>
+                </div>
+                <sl-divider></sl-divider>
+
+                <div class="sidebar-section button-group center-align">
+                    <sl-button-group label="Select Mode">
+                        <sl-tooltip content="object select">
+                            <sl-button id="object-select-btn" variant="primary" size="medium"><sl-icon
+                                    name="hand-index-thumb"></sl-icon></sl-button>
+                        </sl-tooltip>
+                        <sl-tooltip content="color select">
+                            <sl-button id="color-select-btn" size="medium"><sl-icon
+                                    name="eyedropper"></sl-icon></sl-button>
+                        </sl-tooltip>
+                        <sl-tooltip content="select all">
+                            <sl-button id="all-select-btn" size="medium"><sl-icon
+                                    name="check-all"></sl-icon></sl-button>
+                        </sl-tooltip>
+                    </sl-button-group>
+                </div>
+
+                <div class="sidebar-section selection-info">
+                    <div><span id="object-count">0</span> objects selected</div>
+                </div>
+
+                <sl-divider></sl-divider>
+
+                <div class="sidebar-section toggle-eyes">
+                    <div class="eye-row">
+                        <p>original SVG</p>
+                        <sl-icon-button id="toggle-original" name="eye" label="Toggle original"></sl-icon-button>
+                    </div>
+                    <div class="eye-row">
+                        <p>display</p>
+                        <sl-icon-button id="toggle-display" name="eye" label="Toggle display"></sl-icon-button>
+                    </div>
+                    <div class="eye-row">
+                        <p>border</p>
+                        <sl-icon-button id="toggle-border" name="eye" label="Toggle border"></sl-icon-button>
+                    </div>
+                    <div class="eye-row">
+                        <p>bbox</p>
+                        <sl-icon-button id="toggle-bbox" name="eye" label="Toggle bbox"></sl-icon-button>
+                    </div>
+                </div>
+
+                <div class="sidebar-section global-options">
+                    <p>[Global Options]</p>
+                    <div class="input-pair">
+                        <sl-input type="number" label="Depth" id="depth-input" value="0.0625"></sl-input>
+                        <sl-input type="number" label="Width" id="width-input" value="10"></sl-input>
+                    </div>
+                </div>
+
+            </div>
+            <div class="summon-button">
+                <sl-button id="summon-btn" variant="primary">
+                    <sl-icon name="box" slot="prefix"></sl-icon>
+                    Summon command
+                </sl-button>
+            </div>
         </aside>
     </main>
 
