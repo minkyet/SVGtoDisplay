@@ -6,60 +6,70 @@ import {
   drawDisplay,
   getPointCount,
 } from "./geometry.js";
+import { hexToSignedDword } from "./utils.js";
+
+const $ = (id) => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", () => {
   // DOM Elements
-  const toggleButton = document.getElementById("menu-toggle");
-  const sidebar = document.getElementById("sidebar");
-  const svgRenderArea = document.getElementById("svg-render-area");
-  const uploadBtn = document.getElementById("upload-btn");
-  const fileInput = document.getElementById("file-input");
-  const uploadPopup = document.getElementById("svg-upload-popup");
-  const aboutButton = document.getElementById("about-btn");
-  const aboutDialog = document.getElementById("about-dialog");
+  const sidebarToggleButton = $("menu-toggle");
+  const sidebar = $("sidebar");
+  const svgRenderArea = $("svg-render-area");
+  const uploadBtn = $("upload-btn");
+  const fileInput = $("file-input");
+  const uploadPopup = $("svg-upload-popup");
+  const aboutButton = $("about-btn");
+  const aboutDialog = $("about-dialog");
 
-  const replaceConfirmDialog = document.getElementById(
-    "replace-confirm-dialog"
-  );
-  const cancelReplaceButton = document.getElementById("cancel-replace-btn");
-  const confirmReplaceButton = document.getElementById("confirm-replace-btn");
+  const replaceConfirmDialog = $("replace-confirm-dialog");
+  const cancelReplaceButton = $("cancel-replace-btn");
+  const confirmReplaceButton = $("confirm-replace-btn");
 
-  const summonCommandDialog = document.getElementById("summon-command-dialog");
-  const commandText = document.getElementById("command-text");
-  const copyCommandButton = document.getElementById("copy-command-btn");
-  const longCommandAlert = document.getElementById("long-command-alert");
+  const summonCommandDialog = $("summon-command-dialog");
+  const commandText = $("command-text");
+  const copyCommandButton = $("copy-command-btn");
+  const longCommandAlert = $("long-command-alert");
 
-  const reuploadButton = document.getElementById("reupload-btn");
-  const samplerateSlider = document.getElementById("samplerate-slider");
-  const verticeCount = document.getElementById("vertice-count");
-  const triangleCount = document.getElementById("triangle-count");
-  const displayCount = document.getElementById("display-count");
+  const reuploadButton = $("reupload-btn");
+  const samplerateSlider = $("samplerate-slider");
+  const verticeCount = $("vertice-count");
+  const triangleCount = $("triangle-count");
+  const displayCount = $("display-count");
 
-  const resampleButton = document.getElementById("resample-btn");
+  const convertButton = $("convert-btn");
 
-  const objectSelectButton = document.getElementById("object-select-btn");
-  const colorSelectButton = document.getElementById("color-select-btn");
-  const allSelectButton = document.getElementById("all-select-btn");
-  const selectButtons = [
-    objectSelectButton,
-    colorSelectButton,
-    allSelectButton,
-  ];
+  const colorModeGroup = $("colormode-group");
+  const selectionInfo = $("selection-info");
+  const selectModeGroup = $("select-mode-group");
+  const displayTypeGroup = $("display-type-group");
 
-  const toggleOriginal = document.getElementById("toggle-original");
-  const toggleDisplay = document.getElementById("toggle-display");
-  const toggleBorder = document.getElementById("toggle-border");
-  const toggleBbox = document.getElementById("toggle-bbox");
+  const blockWrapper = $("block-input-wrapper");
+  const textWrapper = $("text-input-wrapper");
+  const globalBlockType = $("global-block-type");
+  const globalColor = $("global-color");
 
-  const depthInput = document.getElementById("depth-input");
-  const widthInput = document.getElementById("width-input");
+  const toggleOriginal = $("toggle-original");
+  const toggleDisplay = $("toggle-display");
+  const toggleBorder = $("toggle-border");
+  const toggleBbox = $("toggle-bbox");
+  const toggleButtons = {
+    "#original-svg": toggleOriginal,
+    "#display-svg": toggleDisplay,
+    "#polygon-svg": toggleBorder,
+    "#bbox-svg": toggleBbox,
+  };
 
-  const summonButton = document.getElementById("summon-btn");
+  const depthInput = $("depth-input");
+  const widthInput = $("width-input");
+
+  const summonButton = $("summon-btn");
 
   const draw = SVG().addTo(svgRenderArea).size("100%", "100%");
 
+  const MAX_COMMAND_LENGTH = 32767;
   let resultDisplay = null;
   let pendingSVGFiles = null;
+  let displayType = "block_display";
 
   // refresh warning
   window.addEventListener("beforeunload", (event) => {
@@ -79,62 +89,45 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // eye toggle buttons
-  toggleOriginal.addEventListener("click", () => {
-    const original = draw.findOne("#original-svg");
-    if (original) {
-      toggleOriginal.name = toggleOriginal.name === "eye" ? "eye-slash" : "eye";
-      original.visible() ? original.hide() : original.show();
-    }
+  Object.entries(toggleButtons).forEach(([selector, button]) => {
+    setupToggleIconButton(button, selector);
   });
-  toggleDisplay.addEventListener("click", () => {
-    const display = draw.findOne("#display-svg");
-    if (display) {
-      toggleDisplay.name = toggleDisplay.name === "eye" ? "eye-slash" : "eye";
-      display.visible() ? display.hide() : display.show();
-    }
+
+  // color mode button
+  colorModeGroup.addEventListener("sl-input", (e) => {
+    selectionInfo.classList.toggle("hidden", Number(e.target.value) === 1);
   });
-  toggleBorder.addEventListener("click", () => {
-    const border = draw.findOne("#polygon-svg");
-    if (border) {
-      toggleBorder.name = toggleBorder.name === "eye" ? "eye-slash" : "eye";
-      border.visible() ? border.hide() : border.show();
-    }
-  });
-  toggleBbox.addEventListener("click", () => {
-    const bbox = draw.findOne("#bbox-svg");
-    if (bbox) {
-      toggleBbox.name = toggleBbox.name === "eye" ? "eye-slash" : "eye";
-      bbox.visible() ? bbox.hide() : bbox.show();
+
+  // select mode button
+  selectModeGroup.addEventListener("sl-input", (e) => {});
+
+  // display type button
+  displayTypeGroup.addEventListener("sl-input", (e) => {
+    const selectedValue = Number(e.target.value);
+    if (selectedValue === 1) {
+      displayType = "block_display";
+      depthInput.removeAttribute("disabled");
+      blockWrapper.classList.add("active");
+      textWrapper.classList.remove("active");
+    } else if (selectedValue === 2) {
+      displayType = "text_display";
+      depthInput.setAttribute("disabled", "");
+      blockWrapper.classList.remove("active");
+      textWrapper.classList.add("active");
     }
   });
 
-  // select buttons
-  objectSelectButton.addEventListener("click", () =>
-    selectOnly(objectSelectButton)
-  );
-  colorSelectButton.addEventListener("click", () =>
-    selectOnly(colorSelectButton)
-  );
-  allSelectButton.addEventListener("click", () => selectOnly(allSelectButton));
-
-  toggleButton.addEventListener("click", () => {
+  sidebarToggleButton.addEventListener("click", () => {
     sidebar.classList.toggle("open");
   });
 
   // Drag & Drop
-  ["dragenter", "dragover"].forEach((event) => {
-    svgRenderArea.addEventListener(event, (e) => {
-      e.preventDefault();
-      svgRenderArea.classList.add("dragging");
-    });
-  });
-
-  ["dragleave", "drop"].forEach((event) => {
-    svgRenderArea.addEventListener(event, (e) => {
-      e.preventDefault();
-      svgRenderArea.classList.remove("dragging");
-    });
-  });
+  ["dragenter", "dragover"].forEach((evt) =>
+    svgRenderArea.addEventListener(evt, preventDrag("add"))
+  );
+  ["dragleave", "drop"].forEach((evt) =>
+    svgRenderArea.addEventListener(evt, preventDrag("remove"))
+  );
 
   svgRenderArea.addEventListener("drop", (e) => {
     const files = e.dataTransfer.files;
@@ -190,11 +183,9 @@ document.addEventListener("DOMContentLoaded", () => {
     fileInput.click();
   });
 
-  resampleButton.addEventListener("click", () => {
-    if (!draw.findOne("#original-svg")) {
-      alert("Original SVG not provided.");
-      return;
-    }
+  convertButton.addEventListener("click", () => {
+    if (!requireOriginalSVG()) return;
+
     draw.findOne("#display-svg")?.remove();
     draw.findOne("#polygon-svg")?.remove();
 
@@ -202,10 +193,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   summonButton.addEventListener("click", () => {
-    if (!draw.findOne("#original-svg")) {
-      alert("Original SVG not provided.");
-      return;
-    }
+    if (!requireOriginalSVG()) return;
+
     if (!resultDisplay) {
       alert("Display not provided.");
       return;
@@ -214,19 +203,64 @@ document.addEventListener("DOMContentLoaded", () => {
     summonCommand();
   });
 
+  function preventDrag(action) {
+    return (e) => {
+      e.preventDefault();
+      svgRenderArea.classList[action]("dragging");
+    };
+  }
+
+  function setupPanZoom(target) {
+    target.panZoom({
+      panning: true,
+      wheelZoom: true,
+      pinchZoom: true,
+      zoomMin: 0.1,
+      zoomMax: 40,
+      zoomFactor: 0.2,
+    });
+  }
+
+  function requireOriginalSVG() {
+    const original = draw.findOne("#original-svg");
+    if (!original) {
+      alert("Original SVG not provided.");
+      return false;
+    }
+    return true;
+  }
+
+  function setupToggleIconButton(button, selector) {
+    button.addEventListener("click", () => {
+      const node = draw.findOne(selector);
+      if (node) {
+        button.name = button.name === "eye" ? "eye-slash" : "eye";
+        node.visible() ? node.hide() : node.show();
+      }
+    });
+  }
+
   function summonCommand() {
     const width = draw.findOne("#display-svg").bbox().width;
 
-    resultDisplay.setDepth(depthInput.value);
+    resultDisplay.setType(displayType);
+    if (displayType === "block_display") {
+      resultDisplay.setBlockType(globalBlockType.value);
+      resultDisplay.setDepth(depthInput.value);
+    } else {
+      resultDisplay.setColor(
+        hexToSignedDword(`ff${globalColor.getFormattedValue("hex").slice(1)}`)
+      );
+    }
     resultDisplay.move([0, 0]);
     resultDisplay.scale(widthInput.value / width);
 
     const command = resultDisplay.command();
-    if (command.length > 32767) {
+    if (command.length > MAX_COMMAND_LENGTH) {
       longCommandAlert.classList.remove("hidden");
     }
     commandText.value = command;
-    copyCommandButton.value = command;
+    copyCommandButton.value = commandText.value;
     summonCommandDialog.show();
   }
 
@@ -248,16 +282,6 @@ document.addEventListener("DOMContentLoaded", () => {
     summonButton.removeAttribute("disabled");
   }
 
-  function selectOnly(button) {
-    selectButtons.forEach((btn) => {
-      if (btn === button) {
-        btn.setAttribute("variant", "primary");
-      } else {
-        btn.setAttribute("variant", "default");
-      }
-    });
-  }
-
   function loadSVGFromFiles(files) {
     const file = files[0];
     if (!file || file.type !== "image/svg+xml") {
@@ -266,6 +290,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const reader = new FileReader();
+    reader.onerror = () => {
+      alert("Failed to read the SVG file.");
+    };
     reader.onload = (event) => {
       uploadPopup.classList.add("hidden");
       draw.clear();
@@ -286,24 +313,30 @@ document.addEventListener("DOMContentLoaded", () => {
     updateSidebar(file.name);
   }
 
+  function resetDisplayStats() {
+    verticeCount.textContent =
+      triangleCount.textContent =
+      displayCount.textContent =
+        "?";
+    summonButton.setAttribute("disabled", "");
+    Object.entries(toggleButtons).forEach(([selector, button]) => {
+      button.name = "eye";
+    });
+    longCommandAlert.classList.add("hidden");
+  }
+
   function updateSidebar(fileName) {
     // open sidebar
     sidebar.classList.add("open");
-    toggleButton.classList.remove("hidden");
+    sidebarToggleButton.classList.remove("hidden");
 
     // update filename
-    const filenameLabel = document.getElementById("filename-label");
+    const filenameLabel = $("filename-label");
     if (filenameLabel && fileName) {
       filenameLabel.textContent = fileName;
     }
 
-    // update counts
-    verticeCount.textContent = "?";
-    triangleCount.textContent = "?";
-    displayCount.textContent = "?";
-
-    // disable summon button
-    summonButton.setAttribute("disabled", "");
+    resetDisplayStats();
   }
 
   function applyViewboxAndZoom(bbox, scale = 0.4) {
@@ -319,14 +352,8 @@ document.addEventListener("DOMContentLoaded", () => {
       newWidth,
       newHeight
     );
-    draw.panZoom({
-      panning: true,
-      wheelZoom: true,
-      pinchZoom: true,
-      zoomMin: 0.1,
-      zoomMax: 40,
-      zoomFactor: 0.2,
-    });
+
+    setupPanZoom(draw);
   }
 
   function stripOuterSVG(svgText) {

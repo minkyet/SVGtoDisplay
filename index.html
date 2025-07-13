@@ -23,7 +23,10 @@
     </header>
 
     <sl-dialog label="About" id="about-dialog">
-        <h3>SVGtoDisplay is minecraft tool</h3>
+        <p><strong>SVGtoDisplay</strong> allows you to convert SVG format to Minecraft display entities.</p>
+        <br />
+        <p>github repository: </p>
+        <a href="https://github.com/minkyet/SVGtoDisplay" target='_blank'>https://github.com/minkyet/SVGtoDisplay</a>
         <sl-button slot="footer" variant="primary"
             onclick="document.getElementById('about-dialog').hide()">Close</sl-button>
     </sl-dialog>
@@ -65,7 +68,7 @@
             </div>
         </section>
 
-        <aside id="sidebar">
+        <aside id="sidebar" class="open">
             <div class="sidebar-content">
 
                 <div class="sidebar-section file-info">
@@ -81,7 +84,7 @@
                     <sl-range label="Sample rate" tooltip="top" id="samplerate-slider" min="0.25" max="10" step="0.25"
                         value="5" tooltip></sl-range>
 
-                    <sl-button id="resample-btn" variant="primary" size="medium">
+                    <sl-button id="convert-btn" variant="primary" size="medium">
                         <sl-icon name="columns-gap" slot="prefix"></sl-icon>
                         Convert to Display
                     </sl-button>
@@ -92,30 +95,48 @@
                         <div>displays: <span id="display-count">?</span></div>
                     </div>
                 </div>
-                <sl-divider></sl-divider>
 
-                <div class="sidebar-section button-group center-align">
-                    <sl-button-group label="Select Mode">
-                        <sl-tooltip content="object select">
-                            <sl-button id="object-select-btn" variant="primary" size="medium"><sl-icon
-                                    name="hand-index-thumb"></sl-icon></sl-button>
+                <div class="sidebar-section">
+                    <sl-radio-group label="Select Color Mode" name="mode" value="1" id="colormode-group">
+                        <sl-radio-button value="1">
+                            Monochrome
+                        </sl-radio-button>
+                        <sl-tooltip content="Multicolor mode is in development.">
+                            <sl-radio-button value="2" disabled>
+                                Multicolor
+                            </sl-radio-button>
                         </sl-tooltip>
-                        <sl-tooltip content="color select">
-                            <sl-button id="color-select-btn" size="medium"><sl-icon
-                                    name="eyedropper"></sl-icon></sl-button>
-                        </sl-tooltip>
-                        <sl-tooltip content="select all">
-                            <sl-button id="all-select-btn" size="medium"><sl-icon
-                                    name="check-all"></sl-icon></sl-button>
-                        </sl-tooltip>
-                    </sl-button-group>
+                    </sl-radio-group>
                 </div>
 
-                <div class="sidebar-section selection-info">
+                <div class="sidebar-section hidden" id="selection-info">
+                    <sl-radio-group label="Select Mode" name="mode" value="1" id="select-mode-group">
+                        <sl-radio-button value="1">
+                            <sl-icon name="hand-index-thumb"></sl-icon>
+                        </sl-radio-button>
+                        <sl-radio-button value="2">
+                            <sl-icon name="eyedropper"></sl-icon>
+                        </sl-radio-button>
+                        <sl-radio-button value="3">
+                            <sl-icon name="check-all"></sl-icon>
+                        </sl-radio-button>
+                    </sl-radio-group>
                     <div><span id="object-count">0</span> objects selected</div>
                 </div>
 
-                <sl-divider></sl-divider>
+                <div class="sidebar-section display-type">
+                    <sl-radio-group label="Display type" name="type" value="1" id="display-type-group">
+                        <sl-radio value="1">Block display</sl-radio>
+                        <div id="block-input-wrapper" class="radio-extra active">
+                            <sl-input placeholder="Block name" id="global-block-type"></sl-input>
+                        </div>
+
+                        <sl-radio value="2">Text display</sl-radio>
+                        <div id="text-input-wrapper" class="radio-extra">
+                            <sl-color-picker value="#F03691" id="global-color"></sl-color-picker>
+                        </div>
+                    </sl-radio-group>
+                </div>
 
                 <div class="sidebar-section toggle-eyes">
                     <div class="eye-row">

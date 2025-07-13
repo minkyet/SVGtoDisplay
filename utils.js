@@ -13,7 +13,7 @@ export const vec2 = {
 export function stringifyLiteral(obj) {
   if (obj === null) return "null";
   if (typeof obj === "number") {
-    return formatNumber(obj);
+    return obj;
   }
   if (Array.isArray(obj)) {
     return `[${obj.map(stringifyLiteral).join(", ")}]`;
@@ -36,4 +36,9 @@ export function formatNumber(num, length = 12) {
   const fixed = n.toFixed(length);
   const numStr = parseFloat(fixed).toString();
   return numStr;
+}
+
+export function hexToSignedDword(hexString) {
+  const unsigned = parseInt(hexString, 16);
+  return unsigned >= 0x80000000 ? unsigned - 0x100000000 : unsigned;
 }

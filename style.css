@@ -17,8 +17,12 @@
     box-sizing: border-box;
 }
 
+sl-dialog:not(:defined) {
+  display: none;
+}
+
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 body {
@@ -125,6 +129,7 @@ main {
   background-color: var(--sl-color-neutral-100);
   padding: 1rem;
   overflow: hidden;
+  overflow-x: hidden;
   transform: translateX(100%);
   transition: transform 0.3s ease;
   display: flex;
@@ -133,6 +138,7 @@ main {
 .sidebar-content {
   padding: 1rem;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -169,11 +175,37 @@ main {
   line-height: 1.4;
 }
 
-.button-group.center-align {
-  align-items: center;
+#display-type-group::part(base) {
+  gap: 1rem;
 }
-.button-group sl-button-group {
-  display: inline-flex;
+
+#display-type-group sl-radio {
+  margin-bottom: 0.5rem;
+}
+.radio-extra {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+  max-height: 0;
+  overflow: visible;
+  position: relative;
+  z-index: 200;
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: opacity 0.25s ease, max-height 0.25s ease;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+.radio-extra.active {
+  max-height: 100px;
+  opacity: 1;
+  transform: translateY(0);
+}
+.radio-extra sl-input {
+  width: 100%;
+  max-width: 75%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .toggle-eyes {
