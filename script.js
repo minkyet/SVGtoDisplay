@@ -11,6 +11,13 @@ import { hexToSignedDword } from "./utils.js";
 const $ = (id) => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", () => {
+  fetch("config.json")
+    .then((res) => res.json())
+    .then((config) => {
+      $("version").textContent = `v${config.version}`;
+    })
+    .catch((err) => console.error("FAILED loading config: ", err));
+
   // DOM Elements
   const sidebarToggleButton = $("menu-toggle");
   const sidebar = $("sidebar");
@@ -99,7 +106,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // select mode button
-  selectModeGroup.addEventListener("sl-input", (e) => {});
+  selectModeGroup.addEventListener("sl-input", (e) => {
+    // TODO: select mode (monochrome/multicolor)
+  });
 
   // display type button
   displayTypeGroup.addEventListener("sl-input", (e) => {

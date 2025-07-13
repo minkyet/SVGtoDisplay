@@ -1,2 +1,17 @@
-# [SVGtoDisplay](https://minkyet.github.io/SVGtoDisplay)
+# SVGtoDisplay
 
+<img src="./SVGtoDisplay.png" height="50"/>
+
+Convert svg to minecraft display entities.
+
+https://minkyet.github.io/SVGtoDisplay
+
+> [!NOTE]
+> SVGtoDisplay is working in progress.
+
+---
+
+### TODO
+
+- [ ] multicolor mode
+- [ ] **display optimization**

@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SVGtoDisplay</title>
 
+    <link rel="icon" href="favicon.ico" type="image/x-icon" />
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/themes/dark.css" />
     <script type="module"
         src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/shoelace-autoloader.js"></script>
@@ -15,7 +17,10 @@
 
 <body>
     <header>
-        <h2 class="title">SVGtoDisplay</h2>
+        <h2 class="title">
+            <img src="./SVGtoDisplay.png" style="height: 2rem;" />
+            SVGtoDisplay
+        </h2>
         <div class="header-right">
             <sl-button variant="text" size="large" id="about-btn">About</sl-button>
             <sl-icon-button name="list" label="Menu" class="hamburger hidden" id="menu-toggle"></sl-icon-button>
@@ -23,7 +28,15 @@
     </header>
 
     <sl-dialog label="About" id="about-dialog">
-        <p><strong>SVGtoDisplay</strong> allows you to convert SVG format to Minecraft display entities.</p>
+
+        <h3 style="display: flex; align-items: center; gap: 0.5rem">
+            <img src="./SVGtoDisplay.png" style="height: 2rem" />
+            <div>
+                <strong>SVGtoDisplay</strong>
+                <span id="version"></span>
+            </div>
+        </h3>
+        <p>Convert svg to minecraft display.</p>
         <br />
         <p>github repository: </p>
         <a href="https://github.com/minkyet/SVGtoDisplay" target='_blank'>https://github.com/minkyet/SVGtoDisplay</a>
@@ -68,7 +81,7 @@
             </div>
         </section>
 
-        <aside id="sidebar" class="open">
+        <aside id="sidebar">
             <div class="sidebar-content">
 
                 <div class="sidebar-section file-info">
