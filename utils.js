@@ -1,3 +1,5 @@
+const EPSILON = 1e-8;
+
 export const vec2 = {
   add: ([x1, y1], [x2, y2]) => [x1 + x2, y1 + y2],
   sub: ([x1, y1], [x2, y2]) => [x1 - x2, y1 - y2],
@@ -8,6 +10,10 @@ export const vec2 = {
     const len = Math.hypot(x, y);
     return len === 0 ? [0, 0] : [x / len, y / len];
   },
+  cross: ([x1, y1], [x2, y2]) => x1 * y2 - y1 * x2,
+  equal: ([x1, y1], [x2, y2]) =>
+    Math.abs(x1 - x2) < EPSILON && Math.abs(y1 - y2) < EPSILON,
+  isParallel: (a, b) => Math.abs(vec2.cross(a, b)) < EPSILON,
 };
 
 export function stringifyLiteral(obj) {

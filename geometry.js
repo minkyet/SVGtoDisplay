@@ -1,44 +1,6 @@
 import { Display, triangleToDisplay } from "./display.js";
-
-// find hole in polygons
-export function xorPolygon(polygons) {
-  if (polygons.length === 0) return [];
-
-  const result = polygons.reduce(
-    (prev, curr) => polygonClipping.xor(prev, [curr]),
-    []
-  );
-
-  return sliceSamePoint(result);
-}
-
-function sliceSamePoint(polygons) {
-  return polygons.map((poly) =>
-    poly.map((ring) => {
-      const [first, ..._] = ring;
-      const last = ring[ring.length - 1];
-
-      if (first[0] === last[0] && first[1] === last[1]) {
-        return ring.slice(0, -1);
-      }
-      return ring;
-    })
-  );
-}
-
-export function drawPolygon(draw, polygons) {
-  polygons.forEach((poly) => {
-    const d = poly
-      .map((ring) => `M${ring.map(([x, y]) => `${x},${y}`).join("L")}Z`)
-      .join("");
-
-    const p = draw.path(d);
-    p.fill({ color: "#aff", rule: "evenodd" }).stroke({
-      width: 1,
-      color: "#040",
-    });
-  });
-}
+import { Polygon } from "./polygon.js";
+import { vec2 } from "./utils.js";
 
 export function drawPrimitives(draw, polygons) {
   polygons.forEach((poly) => {
@@ -50,9 +12,9 @@ export function drawPrimitives(draw, polygons) {
       }
       d += "Z";
       const p = draw.path(d);
-      p.fill({ color: "#aff", rule: "evenodd" }).stroke({
+      p.fill({ color: "none", rule: "evenodd" }).stroke({
         width: 0.5,
-        color: "#040",
+        color: "#FB0",
       });
     });
   });
@@ -86,9 +48,10 @@ export function drawDisplay(draw, display, group = undefined) {
 
 export function toDisplay(trianglePolygons) {
   return Display.nestedDisplay(
-    trianglePolygons.flatMap((poly) =>
-      poly.map((triangle) => triangleToDisplay(triangle))
-    )
+    trianglePolygons.flatMap((tripoly) => {
+      if (!tripoly.isTriangle()) return;
+      return triangleToDisplay(tripoly.points.flat());
+    })
   );
 }
 
@@ -103,76 +66,180 @@ function splitIntoEdges(array, edges = 3) {
 }
 
 export function getPointCount(polygons) {
-  return polygons.reduce((sum, polyline) => sum + polyline.length, 0);
+  return polygons.reduce((sum, poly) => sum + poly.getVertexCount(), 0);
 }
 
 export function getTriangleCount(triangles) {
   return triangles.length;
 }
 
-// svg path -> polygonize -> [[[x1, y1], [x2, y2], ...], [...]]
-export function toPolygons(draw, sampleRate) {
-  const existingGroup = draw.findOne("#polygon-svg");
-  if (existingGroup) existingGroup.remove();
+// find hole in polygons
+function xorPolygon(polygons) {
+  if (polygons.length === 0) return [];
 
-  const polygonGroup = draw.group().id("polygon-svg");
+  const result = polygons.reduce(
+    (prev, curr) => polygonClipping.xor(prev, [curr]),
+    []
+  );
 
-  // copy exsiting polygon
-  draw.find("polygon").forEach((poly) => {
-    const points = poly.node
-      .getAttribute("points")
-      .trim()
-      .split(/\s+/)
-      .map((pt) => pt.split(",").map(Number));
-
-    draw.polygon(points).addTo(polygonGroup);
-  });
-
-  // path to polygon
-  draw.find("path").forEach((pathEl) => {
-    function cleanPathData(d) {
-      return d
-        .replace(/[\n\r]+/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-    }
-
-    const dRaw = pathEl.node.getAttribute("d");
-    const d = cleanPathData(dRaw);
-    const subpaths = d.match(/[mM][^mM]+/g) || [d];
-
-    subpaths.forEach((subD) => {
-      try {
-        const tempPath = draw.path(subD.trim());
-        const polygon = tempPath.toPoly(`${sampleRate}%`);
-        polygonGroup.add(polygon);
-        tempPath.remove();
-      } catch (err) {
-        console.error("Failed to convert subpath:", subD, err);
-      }
-    });
-  });
-
-  return polygonGroup
-    .children()
-    .filter((child) => child.type === "polygon")
-    .map((polygon) => {
-      polygon.fill("none").stroke({ width: 0.5, color: "#af0" });
-      const pointsStr = polygon.node.getAttribute("points")?.trim() || "";
-      if (!pointsStr) return [];
-      const pointsArr = pointsStr.split(/\s+/).map((pt) => {
-        const [x, y] = pt.split(",").map(Number);
-        return [x, y];
-      });
-      return pointsArr;
-    });
+  return sliceSamePoint(result);
 }
 
+// slice if polygon[0] == polygon[-1]
+function sliceSamePoint(polygons) {
+  return polygons.map((poly) =>
+    poly.map((ring) => {
+      const [first, ..._] = ring;
+      const last = ring[ring.length - 1];
+
+      if (first[0] === last[0] && first[1] === last[1]) {
+        return ring.slice(0, -1);
+      }
+      return ring;
+    })
+  );
+}
+
+// split subpaths from path
+function splitSubpaths(d) {
+  if (typeof d !== "string") return [];
+
+  const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g) || [];
+  const result = [];
+  let current = "";
+
+  for (const cmd of commands) {
+    if (/^[mM]/.test(cmd) && current) {
+      result.push(current.trim().replace(/\s+/g, " "));
+      current = "";
+    }
+    current += cmd.trim() + " ";
+  }
+  if (current) {
+    result.push(current.trim().replace(/\s+/g, " "));
+  }
+
+  return result;
+}
+
+// convert svg paths to Polygon[]
+export function toPolygons(draw, sampleRate = 2) {
+  const result = [];
+
+  // get all paths and polygons in draw
+  const elements = draw.find("path, polygon");
+
+  // group elements by fill color
+  const colorMap = {};
+  for (const el of elements) {
+    const fill = el.attr("fill") || "#000";
+    if (!colorMap[fill]) colorMap[fill] = [];
+    colorMap[fill].push(el);
+  }
+
+  // process each color group
+  for (const [color, group] of Object.entries(colorMap)) {
+    const allPolys = [];
+
+    for (const el of group) {
+      if (el.type === "path") {
+        const d = el.attr("d");
+        const subpaths = splitSubpaths(d);
+
+        for (const sub of subpaths) {
+          const tempPath = draw.path(sub);
+          const polyResult = tempPath.toPoly(`${sampleRate}%`);
+          tempPath.remove();
+
+          const arr = polyResult.array();
+          if (arr.length >= 3) {
+            allPolys.push(arr);
+          }
+
+          polyResult.remove();
+        }
+      } else if (el.type === "polygon") {
+        const pointsStr = el.attr("points");
+        const points = pointsStr
+          .trim()
+          .split(/[\s,]+/)
+          .reduce((acc, val, idx, arr) => {
+            if (idx % 2 === 0)
+              acc.push([parseFloat(arr[idx]), parseFloat(arr[idx + 1])]);
+            return acc;
+          }, []);
+        if (points.length >= 3) {
+          allPolys.push(points);
+        }
+      }
+    }
+
+    // xor merge
+    const merged = xorPolygon(allPolys);
+
+    // create Polygon instances
+    for (const poly of merged) {
+      result.push(new Polygon(poly[0], poly.slice(1), color));
+    }
+  }
+
+  return result;
+}
+
+// draw outline of Polygon
+export function drawPolygon(draw, polygon, options = {}) {
+  const { outlineColor = "#af0", holeColor = "#afa", width = 0.5 } = options;
+
+  const elements = [];
+
+  // outline
+  const outer = draw
+    .polygon(polygon.points.map(([x, y]) => `${x},${y}`).join(" "))
+    .fill("none")
+    .stroke({
+      color: outlineColor,
+      width: width,
+    });
+
+  elements.push(outer);
+
+  // holes
+  polygon.holes.forEach((hole) => {
+    const outer = draw
+      .polygon(hole.map(([x, y]) => `${x},${y}`).join(" "))
+      .fill("none")
+      .stroke({
+        color: holeColor,
+        width: width,
+      });
+
+    elements.push(outer);
+  });
+
+  return elements;
+}
+
+/**
+ * Polygons to triangles points
+ * @param {Polygon[]} polygons
+ * @returns {Polygon[]}
+ */
 export function toTriangles(polygons) {
-  return polygons.map((poly) => {
-    const flattenPoly = poly.map((ring) => ring.flat());
+  const trianglePolygons = polygons.map((poly) => {
+    const polyarr = [poly.points, ...poly.holes];
+    const flattenPoly = polyarr.map((ring) => ring.flat());
     return splitIntoEdges(triangulate(flattenPoly));
   });
+  return trianglePolygons.flatMap((triangles) =>
+    triangles.map(
+      (triangle) =>
+        new Polygon([
+          [triangle[0], triangle[1]],
+          [triangle[2], triangle[3]],
+          [triangle[4], triangle[5]],
+        ])
+    )
+  );
 }
 
 // code from triangulation example of libtess.js:
@@ -189,7 +256,7 @@ function triangulate(contours) {
   );
   tessy.gluTessCallback(libtess.gluEnum.GLU_TESS_BEGIN, (type) => {
     if (type !== libtess.primitiveType.GL_TRIANGLES) {
-      console.log("expected TRIANGLES but got type: " + type);
+      console.warn("expected TRIANGLES but got type: " + type);
     }
   });
   tessy.gluTessCallback(libtess.gluEnum.GLU_TESS_ERROR, (err) => {
@@ -227,4 +294,225 @@ function triangulate(contours) {
   //     console.log("tesselation time: " + (endTime - startTime).toFixed(2) + "ms");
 
   return triangleVerts;
+}
+
+/**
+ * merge A and B and remove shared side
+ * @param {Polygon} polyA
+ * @param {Polygon} polyB
+ * @param {[[number, number], [number, number]]} shared
+ * @returns {Polygon}
+ */
+function mergePolygons(polyA, polyB, shared) {
+  const [s0, s1] = shared;
+  const lenPolyA = polyA.points.length;
+  const idxPolyAs0 = polyA.points.findIndex((p) => vec2.equal(p, s0));
+  const idxPolyAs1 = polyA.points.findIndex((p) => vec2.equal(p, s1));
+  const idxPolyBs0 = polyB.points.findIndex((p) => vec2.equal(p, s0));
+  const idxPolyBs1 = polyB.points.findIndex((p) => vec2.equal(p, s1));
+
+  let idxPolyAFirst = idxPolyAs0;
+  let idxPolyBSecond = idxPolyBs1;
+
+  // if order s0 -> s1
+  if ((idxPolyAs0 + 1) % lenPolyA === idxPolyAs1) {
+    idxPolyAFirst = idxPolyAs1;
+    idxPolyBSecond = idxPolyBs0;
+  }
+
+  const merged = polyA.points
+    .slice(idxPolyAFirst + 1)
+    .concat(polyA.points.slice(0, idxPolyAFirst))
+    .concat(polyB.points.slice(idxPolyBSecond + 1))
+    .concat(polyB.points.slice(0, idxPolyBSecond));
+
+  return new Polygon(merged, [], polyA.color);
+}
+
+/**
+ * Returns convex polygons using Hertel-Mehlhorn Convex Decomposition.
+ * @param {Polygon} polygon
+ * @returns {Polygon[]}
+ */
+export function convexDecomposition(polygon) {
+  const input = polygon.clone();
+  if (input.isTriangle() || input.isConvex()) return [input];
+
+  /** @type {Polygon[]} */
+  let polygons = toTriangles([input]); // triangle decomposition
+
+  while (true) {
+    let merged = false;
+
+    outer: for (let i = 0; i < polygons.length; i++) {
+      for (let j = i + 1; j < polygons.length; j++) {
+        const polyA = polygons[i];
+        const polyB = polygons[j];
+
+        // check both poly has shared side
+        const shared = [];
+        for (const p1 of polyA.points) {
+          for (const p2 of polyB.points) {
+            if (vec2.equal(p1, p2)) shared.push(p1);
+          }
+        }
+        if (shared.length !== 2) continue;
+
+        const mergeCandidate = mergePolygons(polyA, polyB, shared);
+
+        if (mergeCandidate.isConvex()) {
+          const mergedPoly = mergeCandidate;
+          // merge complete: remove poly A,B / push merged polygon
+          polygons.splice(j, 1);
+          polygons.splice(i, 1);
+          polygons.push(mergedPoly);
+          merged = true;
+
+          break outer;
+        }
+      }
+    }
+
+    if (!merged) break;
+  }
+
+  return polygons;
+}
+
+// FIXME:---------------DEPRECATED BELOW---------------
+
+// Whether point p is inside the angle (cone) vPrev–v–vNext (Hertel–Mehlhorn)
+function inCone(vPrev, v, vNext, p) {
+  // outer: counterclockwise, hole: clockwise
+  const ax = vPrev[0] - v[0],
+    ay = vPrev[1] - v[1];
+  const bx = vNext[0] - v[0],
+    by = vNext[1] - v[1];
+  const apx = p[0] - v[0],
+    apy = p[1] - v[1];
+  const isReflex = vec2.cross([ax, ay], [bx, by]) < 0;
+  if (isReflex) {
+    // p cannot outside cone if reflex vertex
+    return (
+      vec2.cross([ax, ay], [apx, apy]) < 0 &&
+      vec2.cross([apx, apy], [bx, by]) < 0
+    );
+  } else {
+    // convex vertex
+    return !(
+      vec2.cross([ax, ay], [apx, apy]) >= 0 &&
+      vec2.cross([apx, apy], [bx, by]) >= 0
+    );
+  }
+}
+
+// Check if p–q, a–b intersects
+function intersects(p, q, a, b) {
+  const pqx = q[0] - p[0],
+    pqy = q[1] - p[1];
+  const apx = a[0] - p[0],
+    apy = a[1] - p[1];
+  const bpx = b[0] - p[0],
+    bpy = b[1] - p[1];
+  const c1 = vec2.cross([pqx, pqy], [apx, apy]);
+  const c2 = vec2.cross([pqx, pqy], [bpx, bpy]);
+  if (c1 * c2 > 0) return false;
+  const abx = b[0] - a[0],
+    aby = b[1] - a[1];
+  const pax = p[0] - a[0],
+    pay = p[1] - a[1];
+  const qax = q[0] - a[0],
+    qay = q[1] - a[1];
+  const c3 = vec2.cross([abx, aby], [pax, pay]);
+  const c4 = vec2.cross([abx, aby], [qax, qay]);
+  return c3 * c4 <= 0;
+}
+
+function intersectsExclusive(p, q, a, b) {
+  if (
+    (p[0] === a[0] && p[1] === a[1]) ||
+    (p[0] === b[0] && p[1] === b[1]) ||
+    (q[0] === a[0] && q[1] === a[1]) ||
+    (q[0] === b[0] && q[1] === b[1])
+  )
+    return false;
+  return intersects(p, q, a, b);
+}
+
+/**
+ * Returns Polygon without holes.
+ * @deprecated This function is no longer needed.
+ * @param {Polygon} polygon
+ * @returns {Polygon}
+ */
+export function removeHoles(polygon) {
+  let outer = [...polygon.points];
+  let holes = polygon.holes.map((h) => [...h]);
+
+  // while until no hole
+  while (holes.length > 0) {
+    // find best hole point (rightmost)
+    let bestHoleIdx = 0,
+      bestHolePtIdx = 0;
+    for (let i = 0; i < holes.length; i++) {
+      for (let j = 0; j < holes[i].length; j++) {
+        if (holes[i][j][0] > holes[bestHoleIdx][bestHolePtIdx][0]) {
+          bestHoleIdx = i;
+          bestHolePtIdx = j;
+        }
+      }
+    }
+    const hole = holes[bestHoleIdx];
+    const holePt = hole[bestHolePtIdx];
+
+    // find shortest path from holePt to outer point
+    let bestDist = Infinity;
+    let bestOuterIdx = -1;
+    for (let i = 0; i < outer.length; i++) {
+      const pt = outer[i];
+      if (pt[0] <= holePt[0]) continue;
+      // check in cone
+      const prev = outer[(i - 1 + outer.length) % outer.length];
+      const next = outer[(i + 1) % outer.length];
+      if (!inCone(prev, pt, next, holePt)) continue;
+      // check intersect
+      let visible = true;
+      for (let j = 0; j < outer.length; j++) {
+        const a = outer[j],
+          b = outer[(j + 1) % outer.length];
+        if (intersectsExclusive(holePt, pt, a, b)) {
+          visible = false;
+          break;
+        }
+      }
+      if (!visible) continue;
+      const d2 = vec2.length(holePt, pt);
+      if (d2 < bestDist) {
+        bestDist = d2;
+        bestOuterIdx = i;
+      }
+    }
+    if (bestOuterIdx < 0) {
+      throw new Error(
+        "RemoveHoles: Could not find an outer point to connect to."
+      );
+    }
+
+    // merge outer and hole into bridge
+    const newOuter = [];
+    // outer[0..bestOuterIdx]
+    for (let i = 0; i <= bestOuterIdx; i++) newOuter.push(outer[i]);
+    // hole[bestHolePtIdx..bestHolePtIdx] (bestHolePtIdx is duplicated)
+    for (let k = 0; k <= hole.length; k++) {
+      newOuter.push(hole[(bestHolePtIdx + k) % hole.length]);
+    }
+    // outer[bestOuterIdx..end] again
+    for (let i = bestOuterIdx; i < outer.length; i++) newOuter.push(outer[i]);
+
+    // update
+    outer = newOuter;
+    holes.splice(bestHoleIdx, 1);
+  }
+
+  return new Polygon(outer, [], polygon.color);
 }

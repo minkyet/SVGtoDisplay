@@ -1,10 +1,11 @@
 import {
   toDisplay,
-  toPolygons,
   toTriangles,
-  xorPolygon,
   drawDisplay,
   getPointCount,
+  drawPolygon,
+  toPolygons,
+  convexDecomposition,
 } from "./geometry.js";
 import { hexToSignedDword } from "./utils.js";
 
@@ -275,9 +276,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function convertToDisplay() {
     const sampleValue = samplerateSlider.value;
+    const polygonGroup = draw.group().id("polygon-svg");
 
     const polygons = toPolygons(draw, sampleValue);
-    const trianglePolygons = toTriangles(xorPolygon(polygons));
+    const convexPolygons = polygons.flatMap((polygon) => {
+      const decomposedPolygons = convexDecomposition(polygon);
+      decomposedPolygons.forEach((poly) => {
+        drawPolygon(draw, poly).forEach((el) => polygonGroup.add(el));
+      });
+      return decomposedPolygons;
+    });
+    const trianglePolygons = toTriangles(convexPolygons);
     resultDisplay = toDisplay(trianglePolygons);
 
     drawDisplay(draw, resultDisplay);
