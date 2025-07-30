@@ -81,6 +81,49 @@ export class Polygon {
     return totalArea;
   }
 
+  // FIXME: 가끔씩 제대로 안될 때가 있음
+  /**
+   * Returns the index of the vertex with the largest interior angle.
+   * Works for both convex and concave polygons.
+   * @returns {number} Index of the point with the largest interior angle.
+   */
+  getMaxInteriorAngleIndex() {
+    const n = this.points.length;
+    if (n < 3) return -1;
+
+    const isCCW = Polygon.isCounterClockwise(this.points);
+
+    let maxAngle = -Infinity;
+    let maxIndex = -1;
+
+    for (let i = 0; i < n; i++) {
+      const prev = this.points[(i - 1 + n) % n];
+      const curr = this.points[i];
+      const next = this.points[(i + 1) % n];
+
+      const v1 = vec2.sub(prev, curr);
+      const v2 = vec2.sub(next, curr);
+
+      const dot = vec2.dot(v1, v2);
+      const cross = vec2.cross(v1, v2);
+
+      // basic angle
+      let angle = Math.atan2(cross, dot);
+
+      // correct angle over π
+      if (angle < 0) angle += 2 * Math.PI;
+
+      if (!isCCW) angle = 2 * Math.PI - angle;
+
+      if (angle > maxAngle) {
+        maxAngle = angle;
+        maxIndex = i;
+      }
+    }
+
+    return maxIndex;
+  }
+
   /**
    * Returns true if the polygon is a simple convex trapezoid (no holes, 4 vertices)
    * @returns {boolean}
@@ -147,6 +190,60 @@ export class Polygon {
       if (Polygon.isReflex(p1, p2, p3)) return false;
     }
     return true;
+  }
+
+  /**
+   * Checks whether a given point is inside this polygon (ignoring holes).
+   * @param {[number, number]} point - The [x, y] point to test
+   * @returns {boolean} true if inside, false if outside
+   */
+  isInside(point) {
+    const EPSILON = 1e-12;
+    const [px, py] = point;
+    let inside = false;
+    const n = this.points.length;
+
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const [xi, yi] = this.points[i];
+      const [xj, yj] = this.points[j];
+
+      const intersect =
+        yi > py !== yj > py &&
+        px < ((xj - xi) * (py - yi)) / (yj - yi + EPSILON) + xi;
+
+      if (intersect) inside = !inside;
+    }
+
+    return inside;
+  }
+
+  /**
+   * Checks whether a given point is on the polygon's boundary (edge).
+   * @param {[number, number]} point
+   * @returns {boolean}
+   */
+  isOnEdge(point) {
+    const EPSILON = 1e-12;
+    const [px, py] = point;
+    for (
+      let i = 0, j = this.points.length - 1;
+      i < this.points.length;
+      j = i++
+    ) {
+      const [x1, y1] = this.points[j];
+      const [x2, y2] = this.points[i];
+      // colinearity
+      const cross = (px - x1) * (y2 - y1) - (py - y1) * (x2 - x1);
+      if (Math.abs(cross) > EPSILON) continue;
+
+      const dot = (px - x1) * (px - x2) + (py - y1) * (py - y2);
+      if (dot <= EPSILON) return true;
+    }
+    return false;
+  }
+
+  isInsideOrOnEdge(point) {
+    return this.isOnEdge(point) || this.isInside(point);
   }
 
   /**

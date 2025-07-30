@@ -1,11 +1,12 @@
+import { Display } from "./display.js";
 import {
   toDisplay,
-  toTriangles,
   drawDisplay,
   getPointCount,
   drawPolygon,
   toPolygons,
   convexDecomposition,
+  convexToDisplay,
 } from "./geometry.js";
 import { hexToSignedDword } from "./utils.js";
 
@@ -286,14 +287,18 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       return decomposedPolygons;
     });
-    const trianglePolygons = toTriangles(convexPolygons);
-    resultDisplay = toDisplay(trianglePolygons);
+    resultDisplay = Display.nestedDisplay(
+      convexPolygons.map((convexPoly) => convexToDisplay(convexPoly))
+    );
+    // resultDisplay = convexToDisplay()
+    // const trianglePolygons = toTriangles(convexPolygons);
+    // resultDisplay = toDisplay(trianglePolygons);
 
     drawDisplay(draw, resultDisplay);
 
     // update counts
     verticeCount.textContent = getPointCount(polygons);
-    triangleCount.textContent = trianglePolygons.flat().length;
+    // triangleCount.textContent = trianglePolygons.flat().length;
     displayCount.textContent = resultDisplay.getTotalDisplayCount();
 
     // enable summon button

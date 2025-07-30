@@ -46,6 +46,9 @@ export function drawDisplay(draw, display, group = undefined) {
   }
 }
 
+/**
+ * @deprecated This function is no longer needed.
+ */
 export function toDisplay(trianglePolygons) {
   return Display.nestedDisplay(
     trianglePolygons.flatMap((tripoly) => {
@@ -224,7 +227,7 @@ export function drawPolygon(draw, polygon, options = {}) {
  * @param {Polygon[]} polygons
  * @returns {Polygon[]}
  */
-export function toTriangles(polygons) {
+function toTriangles(polygons) {
   const trianglePolygons = polygons.map((poly) => {
     const polyarr = [poly.points, ...poly.holes];
     const flattenPoly = polyarr.map((ring) => ring.flat());
@@ -377,6 +380,44 @@ export function convexDecomposition(polygon) {
   }
 
   return polygons;
+}
+
+/**
+ * Returns Display from convex polygon.
+ * @param {Polygon} polygon
+ * @returns {Display}
+ */
+export function convexToDisplay(polygon) {
+  if (polygon.isTriangle()) return triangleToDisplay(polygon.points.flat());
+  if (polygon.isParallelogram()) {
+    const [p0, p1, p2, _] = polygon.points;
+    return new Display(p1, [vec2.sub(p0, p1), vec2.sub(p2, p1)]);
+  }
+  if (!polygon.isConvex())
+    throw new Error("Convex to Displays ERROR: input polygon is not convex.");
+
+  const length = polygon.points.length;
+  const displays = [];
+  const anchorIdx = polygon.getMaxInteriorAngleIndex();
+
+  for (let i = 0; i < length; i++) {
+    const nextIdx = (i + 1) % length;
+    if (anchorIdx === i || anchorIdx === nextIdx) continue;
+
+    const p0 = polygon.points[anchorIdx];
+    const p1 = polygon.points[i];
+    const p2 = polygon.points[nextIdx];
+    const pointA = vec2.add(p0, vec2.sub(p2, p1));
+    const pointB = vec2.add(p0, vec2.sub(p1, p2));
+
+    if (polygon.isInsideOrOnEdge(pointA))
+      displays.push(new Display(p1, [vec2.sub(p0, p1), vec2.sub(p2, p1)]));
+    else if (polygon.isInsideOrOnEdge(pointB))
+      displays.push(new Display(p1, [vec2.sub(pointB, p1), vec2.sub(p2, p1)]));
+    else displays.push(triangleToDisplay([p0, p1, p2].flat()));
+  }
+
+  return Display.nestedDisplay(displays);
 }
 
 // FIXME:---------------DEPRECATED BELOW---------------

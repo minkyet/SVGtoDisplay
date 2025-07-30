@@ -1,15 +1,24 @@
 import { vec2, stringifyLiteral } from "./utils.js";
 
 export class Display {
+  /**
+   *
+   * @param {[number, number]} position
+   * @param {[[number, number], [number, number]]} sides
+   */
   constructor(position, sides) {
     this.type = "block_display";
     this.state = { Name: "black_concrete" };
     this.colorCode = -16777216;
+    /** @type {Display[]} */
     this.passengers = [];
     this.uuid = undefined;
+    /** @type {[[number, number], [number, number]]} */
     this.sides = sides;
     this.depth = 0.0625;
+    /** @type {[number, number]} */
     this.position = position;
+    /** @type {[number, number]} */
     this.translation = [0, 0];
     this.isRoot = false;
   }
