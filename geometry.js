@@ -1,4 +1,4 @@
-import { Display, triangleToDisplay } from "./display.js";
+import { Display, triangleToDisplays } from "./display.js";
 import { Polygon } from "./polygon.js";
 import { vec2 } from "./utils.js";
 
@@ -25,7 +25,7 @@ export function drawDisplay(draw, display, group = undefined) {
   display.move([0, 0]);
 
   let d = "M";
-  const vertices = display.getVertices();
+  const vertices = display.getVertices().flat();
   for (let i = 0; i < vertices.length; i += 2) {
     d += vertices[i] + "," + vertices[i + 1];
     if (i < vertices.length - 2) d += "L";
@@ -53,7 +53,7 @@ export function toDisplay(trianglePolygons) {
   return Display.nestedDisplay(
     trianglePolygons.flatMap((tripoly) => {
       if (!tripoly.isTriangle()) return;
-      return triangleToDisplay(tripoly.points.flat());
+      return Display.nestedDisplay(triangleToDisplays(tripoly.points));
     })
   );
 }
@@ -129,13 +129,16 @@ function splitSubpaths(d) {
 export function toPolygons(draw, sampleRate = 2) {
   const result = [];
 
-  // get all paths and polygons in draw
-  const elements = draw.find("path, polygon");
+  // include basic shape types + path + polygon
+  const shapeSelectors = ["path", "polygon", "circle", "ellipse", "rect"];
+  const elements = shapeSelectors.flatMap((sel) => draw.find(sel));
 
-  // group elements by fill color
+  // group elements by fill color (filter out fill="none")
   const colorMap = {};
   for (const el of elements) {
-    const fill = el.attr("fill") || "#000";
+    const fill = el.attr("fill");
+    if (!fill || fill === "none") continue;
+
     if (!colorMap[fill]) colorMap[fill] = [];
     colorMap[fill].push(el);
   }
@@ -145,22 +148,11 @@ export function toPolygons(draw, sampleRate = 2) {
     const allPolys = [];
 
     for (const el of group) {
+      let paths = [];
+
       if (el.type === "path") {
         const d = el.attr("d");
-        const subpaths = splitSubpaths(d);
-
-        for (const sub of subpaths) {
-          const tempPath = draw.path(sub);
-          const polyResult = tempPath.toPoly(`${sampleRate}%`);
-          tempPath.remove();
-
-          const arr = polyResult.array();
-          if (arr.length >= 3) {
-            allPolys.push(arr);
-          }
-
-          polyResult.remove();
-        }
+        paths = splitSubpaths(d);
       } else if (el.type === "polygon") {
         const pointsStr = el.attr("points");
         const points = pointsStr
@@ -174,6 +166,25 @@ export function toPolygons(draw, sampleRate = 2) {
         if (points.length >= 3) {
           allPolys.push(points);
         }
+        continue;
+      } else {
+        // other shape types -> path
+        const pathified = el.toPath(false);
+        paths = splitSubpaths(pathified.attr("d"));
+        pathified.remove();
+      }
+
+      for (const sub of paths) {
+        const tempPath = draw.path(sub);
+        const polyResult = tempPath.toPoly(`${sampleRate}%`);
+        tempPath.remove();
+
+        const arr = polyResult.array();
+        if (arr.length >= 3) {
+          allPolys.push(arr);
+        }
+
+        polyResult.remove();
       }
     }
 
@@ -234,14 +245,16 @@ function toTriangles(polygons) {
     return splitIntoEdges(triangulate(flattenPoly));
   });
   return trianglePolygons.flatMap((triangles) =>
-    triangles.map(
-      (triangle) =>
-        new Polygon([
-          [triangle[0], triangle[1]],
-          [triangle[2], triangle[3]],
-          [triangle[4], triangle[5]],
-        ])
-    )
+    triangles
+      .map(
+        (rawTriangle) =>
+          new Polygon([
+            [rawTriangle[0], rawTriangle[1]],
+            [rawTriangle[2], rawTriangle[3]],
+            [rawTriangle[4], rawTriangle[5]],
+          ])
+      )
+      .filter((triangle) => triangle.isConvex())
   );
 }
 
@@ -343,7 +356,6 @@ export function convexDecomposition(polygon) {
 
   /** @type {Polygon[]} */
   let polygons = toTriangles([input]); // triangle decomposition
-
   while (true) {
     let merged = false;
 
@@ -364,7 +376,7 @@ export function convexDecomposition(polygon) {
         const mergeCandidate = mergePolygons(polyA, polyB, shared);
 
         if (mergeCandidate.isConvex()) {
-          const mergedPoly = mergeCandidate;
+          const mergedPoly = mergeCandidate.simplify();
           // merge complete: remove poly A,B / push merged polygon
           polygons.splice(j, 1);
           polygons.splice(i, 1);
@@ -382,13 +394,40 @@ export function convexDecomposition(polygon) {
   return polygons;
 }
 
+// FIXME: 너무 랙걸림
 /**
  * Returns Display from convex polygon.
  * @param {Polygon} polygon
+ * @param {Polygon} [boundaryPolygon=polygon]
  * @returns {Display}
  */
-export function convexToDisplay(polygon) {
-  if (polygon.isTriangle()) return triangleToDisplay(polygon.points.flat());
+export function convexToDisplay(polygon, boundaryPolygon = polygon) {
+  const totalArea = polygon.getArea();
+  const EPSILON = totalArea * 1e-5;
+
+  if (polygon.isTriangle()) {
+    const [p0, p1, p2] = polygon.points;
+    const pA = vec2.add(p0, vec2.sub(p1, p2));
+    const pB = vec2.add(p1, vec2.sub(p2, p0));
+    const pC = vec2.add(p2, vec2.sub(p0, p1));
+
+    if (
+      boundaryPolygon.isSegmentInside(pA, p0) &&
+      boundaryPolygon.isSegmentInside(pA, p1)
+    )
+      return new Display(p0, [vec2.sub(p2, p0), vec2.sub(pA, p0)]);
+    else if (
+      boundaryPolygon.isSegmentInside(pB, p1) &&
+      boundaryPolygon.isSegmentInside(pB, p2)
+    )
+      return new Display(p1, [vec2.sub(p0, p1), vec2.sub(pB, p1)]);
+    else if (
+      boundaryPolygon.isSegmentInside(pC, p2) &&
+      boundaryPolygon.isSegmentInside(pC, p0)
+    )
+      return new Display(p2, [vec2.sub(p1, p2), vec2.sub(pC, p2)]);
+    else return Display.nestedDisplay(triangleToDisplays(polygon.points));
+  }
   if (polygon.isParallelogram()) {
     const [p0, p1, p2, _] = polygon.points;
     return new Display(p1, [vec2.sub(p0, p1), vec2.sub(p2, p1)]);
@@ -396,28 +435,103 @@ export function convexToDisplay(polygon) {
   if (!polygon.isConvex())
     throw new Error("Convex to Displays ERROR: input polygon is not convex.");
 
+  // make possible parallelograms
   const length = polygon.points.length;
-  const displays = [];
-  const anchorIdx = polygon.getMaxInteriorAngleIndex();
-
+  /** @type {Array<{display: Display, coverArea:number}>} */
+  const subsets = [];
   for (let i = 0; i < length; i++) {
-    const nextIdx = (i + 1) % length;
-    if (anchorIdx === i || anchorIdx === nextIdx) continue;
+    for (let j = i + 1; j < length; j++) {
+      for (let k = j + 1; k < length; k++) {
+        const p0 = polygon.points[i];
+        const p1 = polygon.points[j];
+        const p2 = polygon.points[k];
+        const pA = vec2.add(p0, vec2.sub(p1, p2));
+        const pB = vec2.add(p1, vec2.sub(p2, p0));
+        const pC = vec2.add(p2, vec2.sub(p0, p1));
 
-    const p0 = polygon.points[anchorIdx];
-    const p1 = polygon.points[i];
-    const p2 = polygon.points[nextIdx];
-    const pointA = vec2.add(p0, vec2.sub(p2, p1));
-    const pointB = vec2.add(p0, vec2.sub(p1, p2));
+        /** @type {Display[]} */
+        const displays = [];
+        if (
+          boundaryPolygon.isSegmentInside(pA, p0) &&
+          boundaryPolygon.isSegmentInside(pA, p1)
+        )
+          displays.push(new Display(p0, [vec2.sub(p2, p0), vec2.sub(pA, p0)]));
+        if (
+          boundaryPolygon.isSegmentInside(pB, p1) &&
+          boundaryPolygon.isSegmentInside(pB, p2)
+        )
+          displays.push(new Display(p1, [vec2.sub(p0, p1), vec2.sub(pB, p1)]));
+        if (
+          boundaryPolygon.isSegmentInside(pC, p2) &&
+          boundaryPolygon.isSegmentInside(pC, p0)
+        )
+          displays.push(new Display(p2, [vec2.sub(p1, p2), vec2.sub(pC, p2)]));
 
-    if (polygon.isInsideOrOnEdge(pointA))
-      displays.push(new Display(p1, [vec2.sub(p0, p1), vec2.sub(p2, p1)]));
-    else if (polygon.isInsideOrOnEdge(pointB))
-      displays.push(new Display(p1, [vec2.sub(pointB, p1), vec2.sub(p2, p1)]));
-    else displays.push(triangleToDisplay([p0, p1, p2].flat()));
+        if (displays.length === 0) {
+          displays.push(...triangleToDisplays([p0, p1, p2]));
+        }
+
+        displays.forEach((display) => {
+          const area = Polygon.getSimpleArea(
+            sliceSamePoint(
+              polygonClipping.intersection(
+                [display.getVertices()],
+                [polygon.points]
+              )
+            )[0][0]
+          );
+          subsets.push({
+            display: display,
+            coverArea: area,
+          });
+        });
+      }
+    }
   }
 
-  return Display.nestedDisplay(displays);
+  // Filling polygons from a large area
+  let remainArea = polygon.getArea();
+  let mergedArea = [];
+  const resultDisplays = [];
+  while (remainArea > EPSILON) {
+    if (subsets.length === 0) break;
+
+    // get widest parallelogram
+    const widestIdx = subsets.reduce(
+      (maxIdx, curr, i, a) =>
+        curr.coverArea > a[maxIdx].coverArea ? i : maxIdx,
+      0
+    );
+    const [widest] = subsets.splice(widestIdx, 1);
+
+    //
+    mergedArea = sliceSamePoint(
+      polygonClipping.union(mergedArea.length === 0 ? [] : mergedArea, [
+        widest.display.getVertices(),
+      ])
+    );
+
+    resultDisplays.push(widest.display);
+
+    // update subset cover area
+    subsets.forEach((subset) => {
+      const subsetArea = sliceSamePoint(
+        polygonClipping.intersection(
+          [subset.display.getVertices()],
+          [polygon.points]
+        )
+      );
+      subset.coverArea = Polygon.getSimpleArea(
+        sliceSamePoint(
+          polygonClipping.difference(subsetArea, mergedArea)
+        )?.[0]?.[0] || []
+      );
+    });
+
+    remainArea -= widest.coverArea;
+  }
+
+  return Display.nestedDisplay(resultDisplays);
 }
 
 // FIXME:---------------DEPRECATED BELOW---------------

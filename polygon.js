@@ -62,26 +62,26 @@ export class Polygon {
   }
 
   /**
+   * @returns {Polygon} simplify colinear polygon.
+   */
+  simplify() {
+    const result = this.clone();
+    result.points = Polygon.removeColinear(result.points);
+    result.holes = result.holes.map((hole) => Polygon.removeColinear(hole));
+    return result;
+  }
+
+  /**
    * @returns {number} The total signed area of the polygon (holes are subtracted).
    */
   getArea() {
-    const area = (pts) =>
-      0.5 *
-      Math.abs(
-        pts.reduce((acc, [x1, y1], i) => {
-          const [x2, y2] = pts[(i + 1) % pts.length];
-          return acc + (x1 * y2 - x2 * y1);
-        }, 0)
-      );
-
-    let totalArea = area(this.points);
+    let totalArea = Polygon.getSimpleArea(this.points);
     for (const hole of this.holes) {
-      totalArea -= area(hole);
+      totalArea -= Polygon.getSimpleArea(hole);
     }
     return totalArea;
   }
 
-  // FIXME: 가끔씩 제대로 안될 때가 있음
   /**
    * Returns the index of the vertex with the largest interior angle.
    * Works for both convex and concave polygons.
@@ -90,8 +90,6 @@ export class Polygon {
   getMaxInteriorAngleIndex() {
     const n = this.points.length;
     if (n < 3) return -1;
-
-    const isCCW = Polygon.isCounterClockwise(this.points);
 
     let maxAngle = -Infinity;
     let maxIndex = -1;
@@ -105,15 +103,9 @@ export class Polygon {
       const v2 = vec2.sub(next, curr);
 
       const dot = vec2.dot(v1, v2);
-      const cross = vec2.cross(v1, v2);
+      const crossLength = vec2.length(v1) * vec2.length(v2);
 
-      // basic angle
-      let angle = Math.atan2(cross, dot);
-
-      // correct angle over π
-      if (angle < 0) angle += 2 * Math.PI;
-
-      if (!isCCW) angle = 2 * Math.PI - angle;
+      let angle = Math.acos(dot / crossLength);
 
       if (angle > maxAngle) {
         maxAngle = angle;
@@ -193,57 +185,194 @@ export class Polygon {
   }
 
   /**
-   * Checks whether a given point is inside this polygon (ignoring holes).
+   * Checks whether a given point is inside this polygon (including its boundary)
+   * and outside all hole interiors (but points on hole boundaries still count as inside).
    * @param {[number, number]} point - The [x, y] point to test
-   * @returns {boolean} true if inside, false if outside
+   * @returns {boolean} true if inside or on any boundary, false if outside or in a hole interior
    */
   isInside(point) {
-    const EPSILON = 1e-12;
+    const EPSILON = 1e-8;
     const [px, py] = point;
-    let inside = false;
-    const n = this.points.length;
 
-    for (let i = 0, j = n - 1; i < n; j = i++) {
-      const [xi, yi] = this.points[i];
-      const [xj, yj] = this.points[j];
+    // helper: point on segment [a–b]
+    const onSeg = (a, b) => {
+      const cross = (px - a[0]) * (b[1] - a[1]) - (py - a[1]) * (b[0] - a[0]);
+      if (Math.abs(cross) > EPSILON) return false;
+      return (
+        px >= Math.min(a[0], b[0]) - EPSILON &&
+        px <= Math.max(a[0], b[0]) + EPSILON &&
+        py >= Math.min(a[1], b[1]) - EPSILON &&
+        py <= Math.max(a[1], b[1]) + EPSILON
+      );
+    };
 
-      const intersect =
-        yi > py !== yj > py &&
-        px < ((xj - xi) * (py - yi)) / (yj - yi + EPSILON) + xi;
-
-      if (intersect) inside = !inside;
+    // helper: point on boundary
+    const checkBoundary = (pts) => {
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        if (onSeg(pts[j], pts[i])) return true;
+      }
+      return false;
+    };
+    if (checkBoundary(this.points)) return true;
+    for (const hole of this.holes) {
+      if (checkBoundary(hole)) return true;
     }
 
-    return inside;
-  }
-
-  /**
-   * Checks whether a given point is on the polygon's boundary (edge).
-   * @param {[number, number]} point
-   * @returns {boolean}
-   */
-  isOnEdge(point) {
-    const EPSILON = 1e-12;
-    const [px, py] = point;
+    // outer boundary ray-cast
+    let inside = false;
     for (
       let i = 0, j = this.points.length - 1;
       i < this.points.length;
       j = i++
     ) {
-      const [x1, y1] = this.points[j];
-      const [x2, y2] = this.points[i];
-      // colinearity
-      const cross = (px - x1) * (y2 - y1) - (py - y1) * (x2 - x1);
-      if (Math.abs(cross) > EPSILON) continue;
-
-      const dot = (px - x1) * (px - x2) + (py - y1) * (py - y2);
-      if (dot <= EPSILON) return true;
+      const [xi, yi] = this.points[i];
+      const [xj, yj] = this.points[j];
+      const intersect =
+        yi > py !== yj > py &&
+        px < ((xj - xi) * (py - yi)) / (yj - yi + EPSILON) + xi;
+      if (intersect) inside = !inside;
     }
-    return false;
+    if (!inside) return false;
+
+    // holes interiors exclusion (but boundary already handled)
+    for (const hole of this.holes) {
+      let inHole = false;
+      for (let i = 0, j = hole.length - 1; i < hole.length; j = i++) {
+        const [xi, yi] = hole[i];
+        const [xj, yj] = hole[j];
+        const intersect =
+          yi > py !== yj > py &&
+          px < ((xj - xi) * (py - yi)) / (yj - yi + EPSILON) + xi;
+        if (intersect) inHole = !inHole;
+      }
+      if (inHole) return false;
+    }
+
+    return true;
   }
 
-  isInsideOrOnEdge(point) {
-    return this.isOnEdge(point) || this.isInside(point);
+  /**
+   * Checks whether the segment [p0–p1] lies entirely inside this polygon (including its boundary)
+   * and outside all holes. Endpoints on edges count as inside.
+   * @param {[number, number]} p0
+   * @param {[number, number]} p1
+   * @returns {boolean}
+   */
+  isSegmentInside(p0, p1) {
+    const EPSILON = 1e-8;
+
+    // are endpoints inside
+    if (!this.isInside(p0) || !this.isInside(p1)) return false;
+
+    // Check whether two line segments properly intersect (excluding endpoints)
+    const intersectsStrict = (a, b, c, d) => {
+      const orient = (p, q, r) =>
+        (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+      const onSeg = (p, q, r) =>
+        Math.min(p[0], r[0]) - EPSILON <= q[0] &&
+        q[0] <= Math.max(p[0], r[0]) + EPSILON &&
+        Math.min(p[1], r[1]) - EPSILON <= q[1] &&
+        q[1] <= Math.max(p[1], r[1]) + EPSILON;
+      const o1 = orient(a, b, c),
+        o2 = orient(a, b, d);
+      const o3 = orient(c, d, a),
+        o4 = orient(c, d, b);
+
+      // proper intersection
+      if (o1 * o2 < -EPSILON && o3 * o4 < -EPSILON) return true;
+      // colinear overlap at non‐endpoint
+      if (
+        Math.abs(o1) < EPSILON &&
+        onSeg(a, c, b) &&
+        !vec2.equal(c, a) &&
+        !vec2.equal(c, b)
+      )
+        return true;
+      if (
+        Math.abs(o2) < EPSILON &&
+        onSeg(a, d, b) &&
+        !vec2.equal(d, a) &&
+        !vec2.equal(d, b)
+      )
+        return true;
+      if (
+        Math.abs(o3) < EPSILON &&
+        onSeg(c, a, d) &&
+        !vec2.equal(a, c) &&
+        !vec2.equal(a, d)
+      )
+        return true;
+      if (
+        Math.abs(o4) < EPSILON &&
+        onSeg(c, b, d) &&
+        !vec2.equal(b, c) &&
+        !vec2.equal(b, d)
+      )
+        return true;
+      return false;
+    };
+
+    // Check if the outline and each side of every hole intersect
+    const checkEdges = (pts) => {
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        if (intersectsStrict(p0, p1, pts[j], pts[i])) {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    // outlines
+    if (!checkEdges(this.points)) return false;
+    // holes
+    for (const hole of this.holes) {
+      if (!checkEdges(hole)) return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Returns inner area of points
+   * @param {[number, number][]} points
+   * @returns {number}
+   */
+  static getSimpleArea(points) {
+    return (
+      0.5 *
+      Math.abs(
+        points.reduce((acc, [x1, y1], i) => {
+          const [x2, y2] = points[(i + 1) % points.length];
+          return acc + (x1 * y2 - x2 * y1);
+        }, 0)
+      )
+    );
+  }
+
+  /**
+   * remove colinear from points
+   * @param {[number, number][]} points
+   * @returns {[number, number][]}
+   */
+  static removeColinear(points) {
+    const EPSILON = 1e-8;
+    const result = [];
+    const n = points.length;
+    if (n < 3) return points;
+
+    for (let i = 0; i < n; i++) {
+      const a = points[(i - 1 + n) % n];
+      const b = points[i];
+      const c = points[(i + 1) % n];
+
+      const ab = [b[0] - a[0], b[1] - a[1]];
+      const bc = [c[0] - b[0], c[1] - b[1]];
+      const cross = ab[0] * bc[1] - ab[1] * bc[0];
+
+      if (Math.abs(cross) > EPSILON) result.push(b);
+    }
+
+    return result;
   }
 
   /**

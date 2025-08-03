@@ -1,35 +1,61 @@
 import { vec2, stringifyLiteral } from "./utils.js";
 
+/**
+ * Represents a display entity, which can be either a block_display or text_display.
+ * It supports transformation, nesting, and Minecraft summon command generation.
+ */
 export class Display {
   /**
-   *
-   * @param {[number, number]} position
-   * @param {[[number, number], [number, number]]} sides
+   * @param {[number, number]} position - The position of the display entity.
+   * @param {[[number, number], [number, number]]} sides - The two side vectors defining the parallelogram shape.
    */
   constructor(position, sides) {
+    /** @type {string} The type of display entity ("block_display" or "text_display"). */
     this.type = "block_display";
+
+    /** @type {{ Name: string }} The block state for block_display type. */
     this.state = { Name: "black_concrete" };
+
+    /** @type {number} The background color code for text_display type. */
     this.colorCode = -16777216;
-    /** @type {Display[]} */
+
+    /** @type {Display[]} List of nested (passenger) Display entities. */
     this.passengers = [];
+
+    /** @type {string | undefined} UUID identifier (optional). */
     this.uuid = undefined;
-    /** @type {[[number, number], [number, number]]} */
+
+    /** @type {[[number, number], [number, number]]} The two side vectors defining the parallelogram. */
     this.sides = sides;
+
+    /** @type {number} Depth (Z scale) of the display entity. */
     this.depth = 0.0625;
-    /** @type {[number, number]} */
+
+    /** @type {[number, number]} Base position of the entity. */
     this.position = position;
-    /** @type {[number, number]} */
+
+    /** @type {[number, number]} Translation offset to be applied on top of position. */
     this.translation = [0, 0];
+
+    /** @type {boolean} Whether this is the root display entity. */
     this.isRoot = false;
   }
 
+  /**
+   * Applies a callback function recursively to all passenger displays.
+   * @param {(display: Display) => void} callback - The function to apply.
+   */
   #invokeOnPassengers(callback) {
     if (this.passengers.length > 0) {
       this.passengers.forEach((passenger) => callback(passenger));
     }
   }
 
-  // Returns a nested Display based on the first Display
+  /**
+   * Combines a base display and nested passengers into one display.
+   * @param {Display[]} displays - First display is the base, rest are nested.
+   * @returns {Display} A single nested display entity.
+   */
   static nestedDisplay([base, ...rest]) {
     base.translation = vec2.add(base.position, base.translation);
     base.position = [0, 0];
@@ -37,7 +63,10 @@ export class Display {
     return base;
   }
 
-  // Add passenger & set delta translation
+  /**
+   * Adds a nested display (passenger) and updates its relative translation.
+   * @param {Display} display - The display to be added as passenger.
+   */
   addPassenger(display) {
     display.translation = vec2.add(
       display.translation,
@@ -47,54 +76,77 @@ export class Display {
     this.passengers.push(display);
   }
 
-  // Change Display's position (not translation)
+  /**
+   * Sets a new base position for this display.
+   * @param {[number, number]} position - New position.
+   */
   move([x, y]) {
     this.position[0] = x;
     this.position[1] = y;
   }
 
-  // Change Display's scale
+  /**
+   * Scales the display and all its passengers by the given factor.
+   * @param {number} scaleFactor - The scaling factor.
+   */
   scale(scaleFactor) {
     this.sides[0] = vec2.scale(this.sides[0], scaleFactor);
     this.sides[1] = vec2.scale(this.sides[1], scaleFactor);
     this.translation = vec2.scale(this.translation, scaleFactor);
-
     this.#invokeOnPassengers((p) => p.scale(scaleFactor));
   }
 
-  // Change Display's depth
+  /**
+   * Sets the Z-depth of the display and propagates to passengers.
+   * @param {number} depth - The new depth value.
+   */
   setDepth(depth) {
     this.depth = depth;
     this.#invokeOnPassengers((p) => p.setDepth(depth));
   }
 
-  // Change Display's type (block or text)
+  /**
+   * Sets the display type ("block_display" or "text_display").
+   * @param {"block_display" | "text_display"} type - New display type.
+   */
   setType(type) {
     if (type !== "block_display" && type !== "text_display") return;
     this.type = type;
     this.#invokeOnPassengers((p) => p.setType(type));
   }
 
-  // Change Block display's type
+  /**
+   * Sets the block type for block_display entities.
+   * @param {string} blockType - Minecraft block ID (e.g., "stone").
+   */
   setBlockType(blockType) {
     this.state = { Name: blockType };
     this.#invokeOnPassengers((p) => p.setBlockType(blockType));
   }
 
-  // Change Text display's color code
+  /**
+   * Sets the color code for text_display entities.
+   * @param {number} colorCode - ARGB integer color.
+   */
   setColor(colorCode) {
     this.colorCode = colorCode;
     this.#invokeOnPassengers((p) => p.setColor(colorCode));
   }
 
-  // Returns absolute position (position + translation)
+  /**
+   * Gets the absolute position of the display (position + translation).
+   * @returns {[number, number]} The absolute position.
+   */
   getAbsolutePosition() {
     return vec2.add(this.position, this.translation);
   }
 
-  // Returns transformation matrix (invert y)
+  /**
+   * Returns the 4x4 transformation matrix for the display.
+   * Includes scaling, translation, and optional inversion for text.
+   * @returns {number[][]} The transformation matrix.
+   */
   getTransformation() {
-    // text "\s" offset: (8x+0.4, 4y)
     return this.type === "text_display"
       ? [
           [
@@ -120,25 +172,48 @@ export class Display {
         ];
   }
 
-  // Returns 4 vertices
+  /**
+   * Returns the 4 corner vertices of the display's parallelogram in counterclockwise.
+   * @returns {[number, number][]} An array of 4 vertex positions.
+   */
   getVertices() {
     const absPos = this.getAbsolutePosition();
-    return [
-      ...absPos,
-      ...vec2.add(absPos, this.sides[0]),
-      ...vec2.add(vec2.add(absPos, this.sides[0]), this.sides[1]),
-      ...vec2.add(absPos, this.sides[1]),
-    ];
+    const s0 = this.sides[0];
+    const s1 = this.sides[1];
+    const cross = vec2.cross(s0, s1);
+    const [v0, v1, v2, v3] =
+      cross >= 0
+        ? [
+            absPos,
+            vec2.add(absPos, s0),
+            vec2.add(vec2.add(absPos, s0), s1),
+            vec2.add(absPos, s1),
+          ]
+        : [
+            absPos,
+            vec2.add(absPos, s1),
+            vec2.add(vec2.add(absPos, s1), s0),
+            vec2.add(absPos, s0),
+          ];
+
+    return [v0, v1, v2, v3];
   }
 
-  // Returns total display count
+  /**
+   * Recursively counts the total number of displays including passengers.
+   * @returns {number} Total count.
+   */
   getTotalDisplayCount() {
     return (
       1 + this.passengers.reduce((sum, p) => sum + p.getTotalDisplayCount(), 0)
     );
   }
 
-  // Returns summon command string
+  /**
+   * Generates the Minecraft summon command string.
+   * @param {[string, string, string]} [pos=["~","~","~"]] - Position arguments.
+   * @returns {string} The full summon command.
+   */
   command(pos = ["~", "~", "~"]) {
     return ["summon", this.type, pos.join(" "), stringifyLiteral(this.nbt())]
       .join(" ")
@@ -146,7 +221,10 @@ export class Display {
       .replaceAll(": ", ":");
   }
 
-  // Returns display entity's NBT
+  /**
+   * Generates the NBT data structure representing this display.
+   * @returns {object} NBT-compatible object.
+   */
   nbt() {
     const resultNBT = {
       id: this.type,
@@ -168,22 +246,21 @@ export class Display {
   }
 }
 
-export function triangleToDisplay(triangle) {
-  const points = [
-    [triangle[0], triangle[1]],
-    [triangle[2], triangle[3]],
-    [triangle[4], triangle[5]],
-  ];
-
+/**
+ * Converts a triangle into 3 display entities representing parallelograms.
+ * Each parallelogram covers one vertex and the two adjacent edges.
+ *
+ * @param {[number, number][]} points - Three 2D points defining a triangle.
+ * @returns {Display[]} An array of 3 Display objects representing the triangle.
+ */
+export function triangleToDisplays(points) {
   // triangle to 3 parallelograms
-  return Display.nestedDisplay(
-    points.map((p, i) => {
-      const q = points[(i + 1) % 3];
-      const r = points[(i + 2) % 3];
-      return new Display(p, [
-        vec2.scale(vec2.sub(q, p), 0.5),
-        vec2.scale(vec2.sub(r, p), 0.5),
-      ]);
-    })
-  );
+  return points.map((p, i) => {
+    const q = points[(i + 1) % 3];
+    const r = points[(i + 2) % 3];
+    return new Display(p, [
+      vec2.scale(vec2.sub(q, p), 0.5),
+      vec2.scale(vec2.sub(r, p), 0.5),
+    ]);
+  });
 }

@@ -276,24 +276,31 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function convertToDisplay() {
+    const original = draw.findOne("#original-svg");
+    if (!original) {
+      alert("Original SVG not provided.");
+      return false;
+    }
     const sampleValue = samplerateSlider.value;
     const polygonGroup = draw.group().id("polygon-svg");
 
-    const polygons = toPolygons(draw, sampleValue);
-    const convexPolygons = polygons.flatMap((polygon) => {
-      const decomposedPolygons = convexDecomposition(polygon);
-      decomposedPolygons.forEach((poly) => {
-        drawPolygon(draw, poly).forEach((el) => polygonGroup.add(el));
-      });
-      return decomposedPolygons;
-    });
-    resultDisplay = Display.nestedDisplay(
-      convexPolygons.map((convexPoly) => convexToDisplay(convexPoly))
+    const polygons = toPolygons(original, sampleValue);
+    const decomposedPolygons = polygons.map((polygon) =>
+      convexDecomposition(polygon)
     );
-    // resultDisplay = convexToDisplay()
-    // const trianglePolygons = toTriangles(convexPolygons);
-    // resultDisplay = toDisplay(trianglePolygons);
+    resultDisplay = Display.nestedDisplay(
+      polygons.flatMap((polygon, i) => {
+        const convexPolys = decomposedPolygons[i];
+        return convexPolys.map((convexPoly) =>
+          convexToDisplay(convexPoly, polygon)
+        );
+      })
+    );
 
+    // draw border, display
+    polygons.forEach((poly) => {
+      drawPolygon(draw, poly).forEach((el) => polygonGroup.add(el));
+    });
     drawDisplay(draw, resultDisplay);
 
     // update counts
