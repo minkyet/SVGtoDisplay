@@ -1,13 +1,6 @@
 import { Display } from "./display.js";
-import {
-  toDisplay,
-  drawDisplay,
-  getPointCount,
-  drawPolygon,
-  toPolygons,
-  convexDecomposition,
-  convexToDisplay,
-} from "./geometry.js";
+import { drawDisplay, drawPolygon, toPolygons } from "./draw.js";
+import { toDisplay } from "./geometry.js";
 import { hexToSignedDword } from "./utils.js";
 
 const $ = (id) => document.getElementById(id);
@@ -42,7 +35,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const reuploadButton = $("reupload-btn");
   const samplerateSlider = $("samplerate-slider");
   const verticeCount = $("vertice-count");
-  const triangleCount = $("triangle-count");
   const displayCount = $("display-count");
 
   const convertButton = $("convert-btn");
@@ -228,7 +220,7 @@ document.addEventListener("DOMContentLoaded", () => {
       pinchZoom: true,
       zoomMin: 0.1,
       zoomMax: 40,
-      zoomFactor: 0.2,
+      zoomFactor: 0.1,
     });
   }
 
@@ -285,27 +277,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const polygonGroup = draw.group().id("polygon-svg");
 
     const polygons = toPolygons(original, sampleValue);
-    const decomposedPolygons = polygons.map((polygon) =>
-      convexDecomposition(polygon)
-    );
-    resultDisplay = Display.nestedDisplay(
-      polygons.flatMap((polygon, i) => {
-        const convexPolys = decomposedPolygons[i];
-        return convexPolys.map((convexPoly) =>
-          convexToDisplay(convexPoly, polygon)
-        );
-      })
-    );
+    const displays = polygons.map((polygon) => toDisplay(polygon));
 
-    // draw border, display
+    resultDisplay = Display.nestedDisplay(displays);
+
+    // draw border
     polygons.forEach((poly) => {
       drawPolygon(draw, poly).forEach((el) => polygonGroup.add(el));
     });
+    // draw display
     drawDisplay(draw, resultDisplay);
 
     // update counts
-    verticeCount.textContent = getPointCount(polygons);
-    // triangleCount.textContent = trianglePolygons.flat().length;
+    verticeCount.textContent = polygons.reduce(
+      (sum, poly) => sum + poly.getVertexCount(),
+      0
+    );
     displayCount.textContent = resultDisplay.getTotalDisplayCount();
 
     // enable summon button
@@ -344,10 +331,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function resetDisplayStats() {
-    verticeCount.textContent =
-      triangleCount.textContent =
-      displayCount.textContent =
-        "?";
+    verticeCount.textContent = displayCount.textContent = "?";
     summonButton.setAttribute("disabled", "");
     Object.entries(toggleButtons).forEach(([selector, button]) => {
       button.name = "eye";

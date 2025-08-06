@@ -2,90 +2,18 @@ import { Display, triangleToDisplays } from "./display.js";
 import { Polygon } from "./polygon.js";
 import { vec2 } from "./utils.js";
 
-export function drawPrimitives(draw, polygons) {
-  polygons.forEach((poly) => {
-    poly.forEach((shape) => {
-      let d = "M";
-      for (let i = 0; i < shape.length; i += 2) {
-        d += shape[i] + "," + shape[i + 1];
-        if (i < shape.length - 2) d += "L";
-      }
-      d += "Z";
-      const p = draw.path(d);
-      p.fill({ color: "none", rule: "evenodd" }).stroke({
-        width: 0.5,
-        color: "#FB0",
-      });
-    });
-  });
-}
-
-export function drawDisplay(draw, display, group = undefined) {
-  group ??= draw.findOne("#display-svg") ?? draw.group().id("display-svg");
-  display.move([0, 0]);
-
-  let d = "M";
-  const vertices = display.getVertices().flat();
-  for (let i = 0; i < vertices.length; i += 2) {
-    d += vertices[i] + "," + vertices[i + 1];
-    if (i < vertices.length - 2) d += "L";
-  }
-  d += "Z";
-  const p = draw.path(d);
-  p.fill("none")
-    .stroke({
-      width: 0.1,
-      color: "#aff",
-    })
-    .addTo(group);
-
-  if (display.passengers.length > 0) {
-    display.passengers.forEach((passenger) =>
-      drawDisplay(draw, passenger, group)
-    );
-  }
-}
-
 /**
- * @deprecated This function is no longer needed.
+ * Polygon to Display
+ * @param {Polygon} polygon
+ * @returns {Display}
  */
-export function toDisplay(trianglePolygons) {
-  return Display.nestedDisplay(
-    trianglePolygons.flatMap((tripoly) => {
-      if (!tripoly.isTriangle()) return;
-      return Display.nestedDisplay(triangleToDisplays(tripoly.points));
-    })
-  );
-}
-
-// [1,2,3,4,5,6,7,8,9,10,11,12] -> [[1,2,3,4,5,6],[7,8,9,10,11,12]]
-function splitIntoEdges(array, edges = 3) {
-  const chunkSize = edges * 2;
-  const result = [];
-  for (let i = 0; i < array.length; i += chunkSize) {
-    result.push(array.slice(i, i + chunkSize));
-  }
-  return result;
-}
-
-export function getPointCount(polygons) {
-  return polygons.reduce((sum, poly) => sum + poly.getVertexCount(), 0);
-}
-
-export function getTriangleCount(triangles) {
-  return triangles.length;
-}
-
-// find hole in polygons
-function xorPolygon(polygons) {
-  if (polygons.length === 0) return [];
-
-  const result = polygons.reduce(
-    (prev, curr) => polygonClipping.xor(prev, [curr]),
-    []
+export function toDisplay(polygon) {
+  const convexes = convexDecomposition(polygon);
+  const displays = convexes.map((convex) =>
+    convexToDisplay_slow(convex, polygon)
   );
 
-  return sliceSamePoint(result);
+  return Display.nestedDisplay(displays);
 }
 
 // slice if polygon[0] == polygon[-1]
@@ -103,134 +31,14 @@ function sliceSamePoint(polygons) {
   );
 }
 
-// split subpaths from path
-function splitSubpaths(d) {
-  if (typeof d !== "string") return [];
-
-  const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g) || [];
+// [1,2,3,4,5,6,7,8,9,10,11,12] -> [[1,2,3,4,5,6],[7,8,9,10,11,12]]
+function splitIntoEdges(array, edges = 3) {
+  const chunkSize = edges * 2;
   const result = [];
-  let current = "";
-
-  for (const cmd of commands) {
-    if (/^[mM]/.test(cmd) && current) {
-      result.push(current.trim().replace(/\s+/g, " "));
-      current = "";
-    }
-    current += cmd.trim() + " ";
+  for (let i = 0; i < array.length; i += chunkSize) {
+    result.push(array.slice(i, i + chunkSize));
   }
-  if (current) {
-    result.push(current.trim().replace(/\s+/g, " "));
-  }
-
   return result;
-}
-
-// convert svg paths to Polygon[]
-export function toPolygons(draw, sampleRate = 2) {
-  const result = [];
-
-  // include basic shape types + path + polygon
-  const shapeSelectors = ["path", "polygon", "circle", "ellipse", "rect"];
-  const elements = shapeSelectors.flatMap((sel) => draw.find(sel));
-
-  // group elements by fill color (filter out fill="none")
-  const colorMap = {};
-  for (const el of elements) {
-    const fill = el.attr("fill");
-    if (!fill || fill === "none") continue;
-
-    if (!colorMap[fill]) colorMap[fill] = [];
-    colorMap[fill].push(el);
-  }
-
-  // process each color group
-  for (const [color, group] of Object.entries(colorMap)) {
-    const allPolys = [];
-
-    for (const el of group) {
-      let paths = [];
-
-      if (el.type === "path") {
-        const d = el.attr("d");
-        paths = splitSubpaths(d);
-      } else if (el.type === "polygon") {
-        const pointsStr = el.attr("points");
-        const points = pointsStr
-          .trim()
-          .split(/[\s,]+/)
-          .reduce((acc, val, idx, arr) => {
-            if (idx % 2 === 0)
-              acc.push([parseFloat(arr[idx]), parseFloat(arr[idx + 1])]);
-            return acc;
-          }, []);
-        if (points.length >= 3) {
-          allPolys.push(points);
-        }
-        continue;
-      } else {
-        // other shape types -> path
-        const pathified = el.toPath(false);
-        paths = splitSubpaths(pathified.attr("d"));
-        pathified.remove();
-      }
-
-      for (const sub of paths) {
-        const tempPath = draw.path(sub);
-        const polyResult = tempPath.toPoly(`${sampleRate}%`);
-        tempPath.remove();
-
-        const arr = polyResult.array();
-        if (arr.length >= 3) {
-          allPolys.push(arr);
-        }
-
-        polyResult.remove();
-      }
-    }
-
-    // xor merge
-    const merged = xorPolygon(allPolys);
-
-    // create Polygon instances
-    for (const poly of merged) {
-      result.push(new Polygon(poly[0], poly.slice(1), color));
-    }
-  }
-
-  return result;
-}
-
-// draw outline of Polygon
-export function drawPolygon(draw, polygon, options = {}) {
-  const { outlineColor = "#af0", holeColor = "#afa", width = 0.5 } = options;
-
-  const elements = [];
-
-  // outline
-  const outer = draw
-    .polygon(polygon.points.map(([x, y]) => `${x},${y}`).join(" "))
-    .fill("none")
-    .stroke({
-      color: outlineColor,
-      width: width,
-    });
-
-  elements.push(outer);
-
-  // holes
-  polygon.holes.forEach((hole) => {
-    const outer = draw
-      .polygon(hole.map(([x, y]) => `${x},${y}`).join(" "))
-      .fill("none")
-      .stroke({
-        color: holeColor,
-        width: width,
-      });
-
-    elements.push(outer);
-  });
-
-  return elements;
 }
 
 /**
@@ -350,7 +158,7 @@ function mergePolygons(polyA, polyB, shared) {
  * @param {Polygon} polygon
  * @returns {Polygon[]}
  */
-export function convexDecomposition(polygon) {
+function convexDecomposition(polygon) {
   const input = polygon.clone();
   if (input.isTriangle() || input.isConvex()) return [input];
 
@@ -394,14 +202,53 @@ export function convexDecomposition(polygon) {
   return polygons;
 }
 
-// FIXME: 너무 랙걸림
+// #TODO:
 /**
  * Returns Display from convex polygon.
  * @param {Polygon} polygon
  * @param {Polygon} [boundaryPolygon=polygon]
  * @returns {Display}
  */
-export function convexToDisplay(polygon, boundaryPolygon = polygon) {
+function convexToDisplay(polygon, boundaryPolygon = polygon) {
+  if (polygon.isTriangle()) {
+    const [p0, p1, p2] = polygon.points;
+    const pA = vec2.add(p0, vec2.sub(p1, p2));
+    const pB = vec2.add(p1, vec2.sub(p2, p0));
+    const pC = vec2.add(p2, vec2.sub(p0, p1));
+
+    if (
+      boundaryPolygon.isSegmentInside(pA, p0) &&
+      boundaryPolygon.isSegmentInside(pA, p1)
+    )
+      return new Display(p0, [vec2.sub(p2, p0), vec2.sub(pA, p0)]);
+    else if (
+      boundaryPolygon.isSegmentInside(pB, p1) &&
+      boundaryPolygon.isSegmentInside(pB, p2)
+    )
+      return new Display(p1, [vec2.sub(p0, p1), vec2.sub(pB, p1)]);
+    else if (
+      boundaryPolygon.isSegmentInside(pC, p2) &&
+      boundaryPolygon.isSegmentInside(pC, p0)
+    )
+      return new Display(p2, [vec2.sub(p1, p2), vec2.sub(pC, p2)]);
+    else return Display.nestedDisplay(triangleToDisplays(polygon.points));
+  }
+  if (polygon.isParallelogram()) {
+    const [p0, p1, p2, _] = polygon.points;
+    return new Display(p1, [vec2.sub(p0, p1), vec2.sub(p2, p1)]);
+  }
+  if (!polygon.isConvex())
+    throw new Error("Convex to Displays ERROR: input polygon is not convex.");
+}
+
+/**
+ * Returns Display(Parallelogram) from convex polygon.
+ * @param {Polygon} polygon
+ * @param {Polygon} [boundaryPolygon=polygon]
+ * @returns {Display}
+ * @deprecated This function is no longer used.
+ */
+function convexToDisplay_slow(polygon, boundaryPolygon = polygon) {
   const totalArea = polygon.getArea();
   const EPSILON = totalArea * 1e-5;
 
@@ -532,142 +379,4 @@ export function convexToDisplay(polygon, boundaryPolygon = polygon) {
   }
 
   return Display.nestedDisplay(resultDisplays);
-}
-
-// FIXME:---------------DEPRECATED BELOW---------------
-
-// Whether point p is inside the angle (cone) vPrev–v–vNext (Hertel–Mehlhorn)
-function inCone(vPrev, v, vNext, p) {
-  // outer: counterclockwise, hole: clockwise
-  const ax = vPrev[0] - v[0],
-    ay = vPrev[1] - v[1];
-  const bx = vNext[0] - v[0],
-    by = vNext[1] - v[1];
-  const apx = p[0] - v[0],
-    apy = p[1] - v[1];
-  const isReflex = vec2.cross([ax, ay], [bx, by]) < 0;
-  if (isReflex) {
-    // p cannot outside cone if reflex vertex
-    return (
-      vec2.cross([ax, ay], [apx, apy]) < 0 &&
-      vec2.cross([apx, apy], [bx, by]) < 0
-    );
-  } else {
-    // convex vertex
-    return !(
-      vec2.cross([ax, ay], [apx, apy]) >= 0 &&
-      vec2.cross([apx, apy], [bx, by]) >= 0
-    );
-  }
-}
-
-// Check if p–q, a–b intersects
-function intersects(p, q, a, b) {
-  const pqx = q[0] - p[0],
-    pqy = q[1] - p[1];
-  const apx = a[0] - p[0],
-    apy = a[1] - p[1];
-  const bpx = b[0] - p[0],
-    bpy = b[1] - p[1];
-  const c1 = vec2.cross([pqx, pqy], [apx, apy]);
-  const c2 = vec2.cross([pqx, pqy], [bpx, bpy]);
-  if (c1 * c2 > 0) return false;
-  const abx = b[0] - a[0],
-    aby = b[1] - a[1];
-  const pax = p[0] - a[0],
-    pay = p[1] - a[1];
-  const qax = q[0] - a[0],
-    qay = q[1] - a[1];
-  const c3 = vec2.cross([abx, aby], [pax, pay]);
-  const c4 = vec2.cross([abx, aby], [qax, qay]);
-  return c3 * c4 <= 0;
-}
-
-function intersectsExclusive(p, q, a, b) {
-  if (
-    (p[0] === a[0] && p[1] === a[1]) ||
-    (p[0] === b[0] && p[1] === b[1]) ||
-    (q[0] === a[0] && q[1] === a[1]) ||
-    (q[0] === b[0] && q[1] === b[1])
-  )
-    return false;
-  return intersects(p, q, a, b);
-}
-
-/**
- * Returns Polygon without holes.
- * @deprecated This function is no longer needed.
- * @param {Polygon} polygon
- * @returns {Polygon}
- */
-export function removeHoles(polygon) {
-  let outer = [...polygon.points];
-  let holes = polygon.holes.map((h) => [...h]);
-
-  // while until no hole
-  while (holes.length > 0) {
-    // find best hole point (rightmost)
-    let bestHoleIdx = 0,
-      bestHolePtIdx = 0;
-    for (let i = 0; i < holes.length; i++) {
-      for (let j = 0; j < holes[i].length; j++) {
-        if (holes[i][j][0] > holes[bestHoleIdx][bestHolePtIdx][0]) {
-          bestHoleIdx = i;
-          bestHolePtIdx = j;
-        }
-      }
-    }
-    const hole = holes[bestHoleIdx];
-    const holePt = hole[bestHolePtIdx];
-
-    // find shortest path from holePt to outer point
-    let bestDist = Infinity;
-    let bestOuterIdx = -1;
-    for (let i = 0; i < outer.length; i++) {
-      const pt = outer[i];
-      if (pt[0] <= holePt[0]) continue;
-      // check in cone
-      const prev = outer[(i - 1 + outer.length) % outer.length];
-      const next = outer[(i + 1) % outer.length];
-      if (!inCone(prev, pt, next, holePt)) continue;
-      // check intersect
-      let visible = true;
-      for (let j = 0; j < outer.length; j++) {
-        const a = outer[j],
-          b = outer[(j + 1) % outer.length];
-        if (intersectsExclusive(holePt, pt, a, b)) {
-          visible = false;
-          break;
-        }
-      }
-      if (!visible) continue;
-      const d2 = vec2.length(holePt, pt);
-      if (d2 < bestDist) {
-        bestDist = d2;
-        bestOuterIdx = i;
-      }
-    }
-    if (bestOuterIdx < 0) {
-      throw new Error(
-        "RemoveHoles: Could not find an outer point to connect to."
-      );
-    }
-
-    // merge outer and hole into bridge
-    const newOuter = [];
-    // outer[0..bestOuterIdx]
-    for (let i = 0; i <= bestOuterIdx; i++) newOuter.push(outer[i]);
-    // hole[bestHolePtIdx..bestHolePtIdx] (bestHolePtIdx is duplicated)
-    for (let k = 0; k <= hole.length; k++) {
-      newOuter.push(hole[(bestHolePtIdx + k) % hole.length]);
-    }
-    // outer[bestOuterIdx..end] again
-    for (let i = bestOuterIdx; i < outer.length; i++) newOuter.push(outer[i]);
-
-    // update
-    outer = newOuter;
-    holes.splice(bestHoleIdx, 1);
-  }
-
-  return new Polygon(outer, [], polygon.color);
 }
