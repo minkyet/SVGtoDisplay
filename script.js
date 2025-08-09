@@ -1,7 +1,6 @@
 import { Display } from "./display.js";
 import { drawDisplay, drawPolygon, toPolygons } from "./draw.js";
 import { toDisplay } from "./geometry.js";
-import { hexToSignedDword } from "./utils.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -34,6 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const reuploadButton = $("reupload-btn");
   const samplerateSlider = $("samplerate-slider");
+  const polygonCount = $("polygon-count");
   const verticeCount = $("vertice-count");
   const displayCount = $("display-count");
 
@@ -244,21 +244,23 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function summonCommand() {
-    const width = draw.findOne("#display-svg").bbox().width;
+    const bbox = draw.findOne("#display-svg").bbox();
+    const width = bbox.width;
+    const bboxPos = [bbox.x, bbox.y];
+    const summonDisplay = resultDisplay.clone();
 
-    resultDisplay.setType(displayType);
+    summonDisplay.setType(displayType);
     if (displayType === "block_display") {
-      resultDisplay.setBlockType(globalBlockType.value);
-      resultDisplay.setDepth(depthInput.value);
+      summonDisplay.setBlockType(globalBlockType.value);
+      summonDisplay.setDepth(depthInput.value);
     } else {
-      resultDisplay.setColor(
-        hexToSignedDword(`ff${globalColor.getFormattedValue("hex").slice(1)}`)
-      );
+      // TODO: color mode
+      // summonDisplay.setColor(globalColor.getFormattedValue("hex").slice(1));
     }
-    resultDisplay.move([0, 0]);
-    resultDisplay.scale(widthInput.value / width);
+    summonDisplay.move([-bboxPos[0], -bboxPos[1]]);
+    summonDisplay.scale(widthInput.value / width);
 
-    const command = resultDisplay.command();
+    const command = summonDisplay.command();
     if (command.length > MAX_COMMAND_LENGTH) {
       longCommandAlert.classList.remove("hidden");
     }
@@ -289,6 +291,7 @@ document.addEventListener("DOMContentLoaded", () => {
     drawDisplay(draw, resultDisplay);
 
     // update counts
+    polygonCount.textContent = polygons.length;
     verticeCount.textContent = polygons.reduce(
       (sum, poly) => sum + poly.getVertexCount(),
       0
@@ -403,7 +406,7 @@ document.addEventListener("DOMContentLoaded", () => {
       .rect(bbox.width, bbox.height)
       .move(bbox.x, bbox.y)
       .fill("none")
-      .stroke({ width: 1, color: "red", dasharray: "5,5" })
+      .stroke({ width: 0.5, color: "red", dasharray: "5,5" })
       .id("bbox-svg");
   }
 });

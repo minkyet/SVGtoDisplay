@@ -9,7 +9,6 @@ import { Display } from "./display.js";
  */
 export function drawDisplay(draw, display, group = undefined) {
   group ??= draw.findOne("#display-svg") ?? draw.group().id("display-svg");
-  display.move([0, 0]);
 
   let d = "M";
   const vertices = display.getVertices().flat();
@@ -85,67 +84,54 @@ export function toPolygons(draw, sampleRate = 2) {
   const shapeSelectors = ["path", "polygon", "circle", "ellipse", "rect"];
   const elements = shapeSelectors.flatMap((sel) => draw.find(sel));
 
-  // group elements by fill color (filter out fill="none")
-  const colorMap = {};
-  for (const el of elements) {
-    const fill = el.attr("fill");
-    if (!fill || fill === "none") continue;
+  for (let i = 0; i < elements.length; i++) {
+    const layer = i;
+    const el = elements[i];
+    const fillColor = getComputedFill(el);
+    if (!fillColor || fillColor === "none") continue;
 
-    if (!colorMap[fill]) colorMap[fill] = [];
-    colorMap[fill].push(el);
-  }
-
-  // process each color group
-  for (const [color, group] of Object.entries(colorMap)) {
-    const allPolys = [];
-
-    for (const el of group) {
-      let paths = [];
-
-      if (el.type === "path") {
-        const d = el.attr("d");
-        paths = splitSubpaths(d);
-      } else if (el.type === "polygon") {
-        const pointsStr = el.attr("points");
-        const points = pointsStr
-          .trim()
-          .split(/[\s,]+/)
-          .reduce((acc, val, idx, arr) => {
-            if (idx % 2 === 0)
-              acc.push([parseFloat(arr[idx]), parseFloat(arr[idx + 1])]);
-            return acc;
-          }, []);
-        if (points.length >= 3) {
-          allPolys.push(points);
-        }
-        continue;
-      } else {
-        // other shape types -> path
-        const pathified = el.toPath(false);
-        paths = splitSubpaths(pathified.attr("d"));
-        pathified.remove();
+    const subpaths = [];
+    const polys = [];
+    if (el.type === "path") {
+      const d = el.attr("d");
+      subpaths.push(...splitSubpaths(d));
+    } else if (el.type === "polygon") {
+      const pointsStr = el.attr("points");
+      const points = pointsStr
+        .trim()
+        .split(/[\s,]+/)
+        .reduce((acc, val, idx, arr) => {
+          if (idx % 2 === 0)
+            acc.push([parseFloat(arr[idx]), parseFloat(arr[idx + 1])]);
+          return acc;
+        }, []);
+      if (points.length >= 3) {
+        polys.push(points);
       }
+    } else {
+      // other shape types -> path
+      const pathified = el.toPath(false);
+      subpaths.push(...splitSubpaths(pathified.attr("d")));
+      pathified.remove();
+    }
 
-      for (const sub of paths) {
-        const tempPath = draw.path(sub);
-        const polyResult = tempPath.toPoly(`${sampleRate}%`);
-        tempPath.remove();
-
-        const arr = polyResult.array();
-        if (arr.length >= 3) {
-          allPolys.push(arr);
-        }
-
-        polyResult.remove();
+    for (const subpath of subpaths) {
+      const tempPath = draw.path(subpath);
+      const polyfied = tempPath.toPoly(`${sampleRate}%`);
+      tempPath.remove();
+      const arr = polyfied.array();
+      if (arr.length >= 3) {
+        polys.push(arr);
       }
+      polyfied.remove();
     }
 
     // xor merge
-    const merged = xorPolygon(allPolys);
+    const merged = xorPolygon(polys);
 
     // create Polygon instances
     for (const poly of merged) {
-      result.push(new Polygon(poly[0], poly.slice(1), color));
+      result.push(new Polygon(poly[0], poly.slice(1), fillColor, layer));
     }
   }
 
@@ -187,9 +173,9 @@ function sliceSamePoint(polygons) {
   );
 }
 
-// split subpaths from path
 /**
- *
+ * Splits subpaths from a path string, ensuring each subpath is standalone.
+ * Converts relative starting movetos ('m') to absolute ('M').
  * @param {string} d
  * @returns {string[]}
  */
@@ -197,19 +183,141 @@ function splitSubpaths(d) {
   if (typeof d !== "string") return [];
 
   const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g) || [];
-  const result = [];
-  let current = "";
+  if (commands.length === 0) return [];
 
-  for (const cmd of commands) {
-    if (/^[mM]/.test(cmd) && current) {
-      result.push(current.trim().replace(/\s+/g, " "));
-      current = "";
+  const result = [];
+  let currentSubpath = "";
+  let cx = 0;
+  let cy = 0;
+  let startX = 0;
+  let startY = 0;
+
+  for (const cmdStr of commands) {
+    const commandChar = cmdStr[0];
+    const params = (cmdStr.substring(1).match(/-?[\d.]+/g) || []).map(
+      parseFloat
+    );
+
+    if (commandChar === "M" || commandChar === "m") {
+      if (currentSubpath) {
+        result.push(currentSubpath.trim());
+      }
+
+      // Convert 'm' (relative) command to 'M' (absolute) command
+      if (commandChar === "m") {
+        cx += params[0];
+        cy += params[1];
+        currentSubpath = `M ${cx} ${cy} `;
+      } else {
+        cx = params[0];
+        cy = params[1];
+        currentSubpath = cmdStr + " ";
+      }
+      startX = cx;
+      startY = cy;
+
+      // Handle cases where 'm' or 'M' comes with multiple coordinate pairs (e.g., M 10 10 20 20)
+      for (let i = 2; i < params.length; i += 2) {
+        if (commandChar === "m") {
+          cx += params[i];
+          cy += params[i + 1];
+          currentSubpath += `L ${cx} ${cy} `; // implicit Lineto
+        } else {
+          cx = params[i];
+          cy = params[i + 1];
+          currentSubpath += `L ${cx} ${cy} `; // implicit Lineto
+        }
+      }
+    } else {
+      currentSubpath += cmdStr + " ";
+
+      // Update the last position of the pen for each command
+      const pLen = params.length;
+      switch (commandChar) {
+        case "L":
+        case "T":
+          cx = params[pLen - 2];
+          cy = params[pLen - 1];
+          break;
+        case "l":
+        case "t":
+          cx += params[pLen - 2];
+          cy += params[pLen - 1];
+          break;
+        case "H":
+          cx = params[pLen - 1];
+          break;
+        case "h":
+          cx += params[pLen - 1];
+          break;
+        case "V":
+          cy = params[pLen - 1];
+          break;
+        case "v":
+          cy += params[pLen - 1];
+          break;
+        case "C":
+          cx = params[pLen - 4];
+          cy = params[pLen - 3];
+          break;
+        case "c":
+          cx += params[pLen - 4];
+          cy += params[pLen - 3];
+          break;
+        case "S":
+        case "Q":
+          cx = params[pLen - 2];
+          cy = params[pLen - 1];
+          break;
+        case "s":
+        case "q":
+          cx += params[pLen - 2];
+          cy += params[pLen - 1];
+          break;
+        case "A":
+          cx = params[pLen - 2];
+          cy = params[pLen - 1];
+          break;
+        case "a":
+          cx += params[pLen - 2];
+          cy += params[pLen - 1];
+          break;
+        case "Z":
+        case "z":
+          // When a path is closed, the pen position returns to the starting point of the subpath.
+          cx = startX;
+          cy = startY;
+          break;
+      }
     }
-    current += cmd.trim() + " ";
   }
-  if (current) {
-    result.push(current.trim().replace(/\s+/g, " "));
+
+  // Add the last processed subpath to the result
+  if (currentSubpath) {
+    result.push(currentSubpath.trim());
   }
 
   return result;
+}
+
+function rgbToHex(rgb) {
+  const match = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (!match) return rgb;
+
+  const r = parseInt(match[1]).toString(16).padStart(2, "0");
+  const g = parseInt(match[2]).toString(16).padStart(2, "0");
+  const b = parseInt(match[3]).toString(16).padStart(2, "0");
+
+  return `${r}${g}${b}`.toLowerCase();
+}
+
+function getComputedFill(el) {
+  const node = el.node;
+  const fill = window.getComputedStyle(node).fill;
+  return rgbToHex(fill);
+}
+
+function getLayerIndex(el) {
+  const siblings = el.parent().children();
+  return siblings.indexOf(el);
 }

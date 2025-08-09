@@ -7,9 +7,10 @@ export class Polygon {
   /**
    * @param {[number, number][]} points - The outer boundary points in counterclockwise order.
    * @param {Array<[number, number][]>} [holes=[]] - Array of holes, each a set of points in clockwise order.
-   * @param {string} [color="#000"] - The fill color of the polygon.
+   * @param {string} [color="#000000"] - The hex string fill color of the polygon (RRGGBB).
+   * @param {number} [layer=0] - Layer number. The higher the number, the more outer.
    */
-  constructor(points, holes = [], color = "#000") {
+  constructor(points, holes = [], color = "#000000", layer = 0) {
     /** @type {[number, number][]} */
     this.points = points;
 
@@ -18,6 +19,9 @@ export class Polygon {
 
     /** @type {string} */
     this.color = color;
+
+    /** @type {number} */
+    this.layer = layer;
   }
 
   /** @returns {number} The number of holes in the polygon. */
@@ -57,7 +61,8 @@ export class Polygon {
     return new Polygon(
       this.points.map((p) => [...p]),
       this.holes.map((hole) => hole.map((p) => [...p])),
-      this.color
+      this.color,
+      this.layer
     );
   }
 
@@ -172,7 +177,6 @@ export class Polygon {
    * @returns {boolean}
    */
   isConvex() {
-    if (!Polygon.isCounterClockwise(this.points)) return false;
     if (this.hasHole()) return false;
     const n = this.points.length;
     for (let i = 0; i < n; i++) {
@@ -379,6 +383,7 @@ export class Polygon {
    * Determines if a point array forms a counterclockwise polygon.
    * @param {[number, number][]} points
    * @returns {boolean}
+   * @deprecated this function is no longer used.
    */
   static isCounterClockwise(points) {
     let sum = 0;
@@ -387,7 +392,7 @@ export class Polygon {
       const [x2, y2] = points[(i + 1) % points.length];
       sum += (x2 - x1) * (y2 + y1);
     }
-    return sum < 0;
+    return sum > 0;
   }
 
   /**

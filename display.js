@@ -1,4 +1,4 @@
-import { vec2, stringifyLiteral } from "./utils.js";
+import { vec2, stringifyLiteral, hexToSignedDword } from "./utils.js";
 
 /**
  * Represents a display entity, which can be either a block_display or text_display.
@@ -8,13 +8,14 @@ export class Display {
   /**
    * @param {[number, number]} position - The position of the display entity.
    * @param {[[number, number], [number, number]]} sides - The two side vectors defining the parallelogram shape.
+   * @param {number} [layer=0] - Layer number. The higher the number, the more outer.
    */
-  constructor(position, sides) {
+  constructor(position, sides, layer = 0) {
     /** @type {string} The type of display entity ("block_display" or "text_display"). */
     this.type = "block_display";
 
     /** @type {{ Name: string }} The block state for block_display type. */
-    this.state = { Name: "black_concrete" };
+    this.state = { Name: "pink_concrete" };
 
     /** @type {number} The background color code for text_display type. */
     this.colorCode = -16777216;
@@ -26,7 +27,8 @@ export class Display {
     this.uuid = undefined;
 
     /** @type {[[number, number], [number, number]]} The two side vectors defining the parallelogram. */
-    this.sides = sides;
+    this.sides =
+      vec2.cross(sides[0], sides[1]) > 0 ? sides : [sides[1], sides[0]];
 
     /** @type {number} Depth (Z scale) of the display entity. */
     this.depth = 0.0625;
@@ -39,16 +41,33 @@ export class Display {
 
     /** @type {boolean} Whether this is the root display entity. */
     this.isRoot = false;
+
+    /** @type {number} */
+    this.layer = layer;
   }
 
   /**
-   * Applies a callback function recursively to all passenger displays.
-   * @param {(display: Display) => void} callback - The function to apply.
+   * Returns deep-copied Display of this
+   * @returns {Display}
    */
-  #invokeOnPassengers(callback) {
-    if (this.passengers.length > 0) {
-      this.passengers.forEach((passenger) => callback(passenger));
-    }
+  clone() {
+    const copy = new Display(
+      [...this.position],
+      [[...this.sides[0]], [...this.sides[1]]]
+    );
+
+    copy.type = this.type;
+    copy.state = { ...this.state };
+    copy.colorCode = this.colorCode;
+    copy.uuid = this.uuid;
+    copy.depth = this.depth;
+    copy.translation = [...this.translation];
+    copy.isRoot = this.isRoot;
+    copy.layer = this.layer;
+
+    copy.passengers = this.passengers.map((p) => p.clone());
+
+    return copy;
   }
 
   /**
@@ -77,12 +96,12 @@ export class Display {
   }
 
   /**
-   * Sets a new base position for this display.
-   * @param {[number, number]} position - New position.
+   * Add a new translation for this display.
+   * @param {[number, number]} translation
    */
-  move([x, y]) {
-    this.position[0] = x;
-    this.position[1] = y;
+  move(translation) {
+    this.translation = vec2.add(this.translation, translation);
+    this.passengers.forEach((d) => d.move(translation));
   }
 
   /**
@@ -93,7 +112,7 @@ export class Display {
     this.sides[0] = vec2.scale(this.sides[0], scaleFactor);
     this.sides[1] = vec2.scale(this.sides[1], scaleFactor);
     this.translation = vec2.scale(this.translation, scaleFactor);
-    this.#invokeOnPassengers((p) => p.scale(scaleFactor));
+    this.passengers.forEach((p) => p.scale(scaleFactor));
   }
 
   /**
@@ -102,7 +121,16 @@ export class Display {
    */
   setDepth(depth) {
     this.depth = depth;
-    this.#invokeOnPassengers((p) => p.setDepth(depth));
+    this.passengers.forEach((p) => p.setDepth(depth));
+  }
+
+  /**
+   * Sets layer number
+   * @param {number} layer
+   */
+  setLayer(layer) {
+    this.layer = layer;
+    this.passengers.forEach((p) => p.setLayer(layer));
   }
 
   /**
@@ -112,25 +140,34 @@ export class Display {
   setType(type) {
     if (type !== "block_display" && type !== "text_display") return;
     this.type = type;
-    this.#invokeOnPassengers((p) => p.setType(type));
+    this.passengers.forEach((p) => p.setType(type));
   }
 
   /**
    * Sets the block type for block_display entities.
-   * @param {string} blockType - Minecraft block ID (e.g., "stone").
+   * @param {string} blockType - Minecraft block ID (e.g., "minecraft:stone").
    */
   setBlockType(blockType) {
     this.state = { Name: blockType };
-    this.#invokeOnPassengers((p) => p.setBlockType(blockType));
+    this.passengers.forEach((p) => p.setBlockType(blockType));
   }
 
   /**
    * Sets the color code for text_display entities.
-   * @param {number} colorCode - ARGB integer color.
+   * @param {string} hexColor - hex color string(RRGGBB).
    */
-  setColor(colorCode) {
-    this.colorCode = colorCode;
-    this.#invokeOnPassengers((p) => p.setColor(colorCode));
+  setColor(hexColor) {
+    this.colorCode = hexToSignedDword(`ff${hexColor}`);
+    this.passengers.forEach((p) => p.setColor(hexColor));
+  }
+
+  /**
+   * Returns z offset by layer.
+   * @param {number} offset
+   * @returns {number}
+   */
+  getZOffset(offset = 0.001) {
+    return this.layer * offset;
   }
 
   /**
@@ -161,7 +198,7 @@ export class Display {
             0,
             -(this.translation[1] + 0.4 * this.sides[1][1]),
           ],
-          [0, 0, this.depth * 1, 0],
+          [0, 0, this.depth * 1, this.getZOffset()],
           [0, 0, 0, 1],
         ]
       : [
@@ -211,7 +248,7 @@ export class Display {
 
   /**
    * Generates the Minecraft summon command string.
-   * @param {[string, string, string]} [pos=["~","~","~"]] - Position arguments.
+   * @param {[number|"~", number|"~", number|"~"]} [pos=["~","~","~"]] - Position arguments.
    * @returns {string} The full summon command.
    */
   command(pos = ["~", "~", "~"]) {

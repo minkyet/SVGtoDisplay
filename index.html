@@ -103,6 +103,7 @@
                     </sl-button>
 
                     <div class="sample-results">
+                        <div>polygons: <span id="polygon-count">?</span></div>
                         <div>vertices: <span id="vertice-count">?</span></div>
                         <div>displays: <span id="display-count">?</span></div>
                     </div>
@@ -140,7 +141,7 @@
                     <sl-radio-group label="Display type" name="type" value="1" id="display-type-group">
                         <sl-radio value="1">Block display</sl-radio>
                         <div id="block-input-wrapper" class="radio-extra active">
-                            <sl-input placeholder="Block name" id="global-block-type"></sl-input>
+                            <sl-input placeholder="Block name" value="pink_concrete" id="global-block-type"></sl-input>
                         </div>
 
                         <sl-radio value="2">Text display</sl-radio>
@@ -160,11 +161,11 @@
                         <sl-icon-button id="toggle-display" name="eye" label="Toggle display"></sl-icon-button>
                     </div>
                     <div class="eye-row">
-                        <p>border</p>
+                        <p>outline</p>
                         <sl-icon-button id="toggle-border" name="eye" label="Toggle border"></sl-icon-button>
                     </div>
                     <div class="eye-row">
-                        <p>bbox</p>
+                        <p>boundary box</p>
                         <sl-icon-button id="toggle-bbox" name="eye" label="Toggle bbox"></sl-icon-button>
                     </div>
                 </div>

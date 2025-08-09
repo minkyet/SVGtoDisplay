@@ -10,8 +10,3 @@ https://minkyet.github.io/SVGtoDisplay
 > SVGtoDisplay is working in progress.
 
 ---
-
-### TODO
-
-- [ ] multicolor mode
-- [ ] **display optimization**

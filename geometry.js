@@ -9,14 +9,18 @@ import { vec2 } from "./utils.js";
  */
 export function toDisplay(polygon) {
   const convexes = convexDecomposition(polygon);
-  const displays = convexes.map((convex) =>
-    convexToDisplay_slow(convex, polygon)
-  );
-
-  return Display.nestedDisplay(displays);
+  const displays = convexes.map((convex) => convexToDisplay(convex, polygon));
+  const result = Display.nestedDisplay(displays);
+  result.setColor(polygon.color);
+  result.setLayer(polygon.layer);
+  return result;
 }
 
-// slice if polygon[0] == polygon[-1]
+/**
+ * slice if polygon[0] == polygon[-1]
+ * @param {[number, number][][][]} polygons
+ * @returns {[number, number][][][]}
+ */
 function sliceSamePoint(polygons) {
   return polygons.map((poly) =>
     poly.map((ring) => {
@@ -42,32 +46,12 @@ function splitIntoEdges(array, edges = 3) {
 }
 
 /**
- * Polygons to triangles points
- * @param {Polygon[]} polygons
- * @returns {Polygon[]}
+ * triangulate polygon points + holes.
+ * code from triangulation example of libtess.js:
+ * https://github.com/brendankenny/libtess.js/blob/gh-pages/examples/simple_triangulation/triangulate.js
+ * @param {number[][]} contours
+ * @returns {number[]}
  */
-function toTriangles(polygons) {
-  const trianglePolygons = polygons.map((poly) => {
-    const polyarr = [poly.points, ...poly.holes];
-    const flattenPoly = polyarr.map((ring) => ring.flat());
-    return splitIntoEdges(triangulate(flattenPoly));
-  });
-  return trianglePolygons.flatMap((triangles) =>
-    triangles
-      .map(
-        (rawTriangle) =>
-          new Polygon([
-            [rawTriangle[0], rawTriangle[1]],
-            [rawTriangle[2], rawTriangle[3]],
-            [rawTriangle[4], rawTriangle[5]],
-          ])
-      )
-      .filter((triangle) => triangle.isConvex())
-  );
-}
-
-// code from triangulation example of libtess.js:
-// https://github.com/brendankenny/libtess.js/blob/gh-pages/examples/simple_triangulation/triangulate.js
 function triangulate(contours) {
   const tessy = new libtess.GluTesselator();
 
@@ -118,6 +102,31 @@ function triangulate(contours) {
   //     console.log("tesselation time: " + (endTime - startTime).toFixed(2) + "ms");
 
   return triangleVerts;
+}
+
+/**
+ * Polygons to triangles points
+ * @param {Polygon[]} polygons
+ * @returns {Polygon[]}
+ */
+function toTriangles(polygons) {
+  const trianglePolygons = polygons.map((poly) => {
+    const polyarr = [poly.points, ...poly.holes];
+    const flattenPoly = polyarr.map((ring) => ring.flat());
+    return splitIntoEdges(triangulate(flattenPoly));
+  });
+  return trianglePolygons.flatMap((triangles) =>
+    triangles
+      .map(
+        (rawTriangle) =>
+          new Polygon([
+            [rawTriangle[0], rawTriangle[1]],
+            [rawTriangle[2], rawTriangle[3]],
+            [rawTriangle[4], rawTriangle[5]],
+          ])
+      )
+      .filter((triangle) => triangle.isConvex())
+  );
 }
 
 /**
@@ -202,9 +211,9 @@ function convexDecomposition(polygon) {
   return polygons;
 }
 
-// #TODO:
 /**
  * Returns Display from convex polygon.
+ * - Moderate optimized display count, fast convert speed O(n)
  * @param {Polygon} polygon
  * @param {Polygon} [boundaryPolygon=polygon]
  * @returns {Display}
@@ -239,14 +248,48 @@ function convexToDisplay(polygon, boundaryPolygon = polygon) {
   }
   if (!polygon.isConvex())
     throw new Error("Convex to Displays ERROR: input polygon is not convex.");
+
+  /** @type {Display[]} */
+  const resultDisplays = [];
+  const length = polygon.points.length;
+  const maxIdx = polygon.getMaxInteriorAngleIndex();
+
+  const p0 = polygon.points[maxIdx];
+  for (let i = 0; i < length; i++) {
+    if (i === maxIdx || (i + 1) % length === maxIdx) continue;
+
+    const p1 = polygon.points[i];
+    const p2 = polygon.points[(i + 1) % length];
+    const pA = vec2.add(p0, vec2.sub(p1, p2));
+    const pC = vec2.add(p2, vec2.sub(p0, p1));
+    if (
+      boundaryPolygon.isSegmentInside(pA, p0) &&
+      boundaryPolygon.isSegmentInside(pA, p1)
+    )
+      resultDisplays.push(
+        new Display(p0, [vec2.sub(p2, p0), vec2.sub(pA, p0)])
+      );
+    else if (
+      boundaryPolygon.isSegmentInside(pC, p2) &&
+      boundaryPolygon.isSegmentInside(pC, p0)
+    )
+      resultDisplays.push(
+        new Display(p2, [vec2.sub(p1, p2), vec2.sub(pC, p2)])
+      );
+    else resultDisplays.push(...triangleToDisplays([p0, p1, p2]));
+  }
+
+  return Display.nestedDisplay(resultDisplays);
 }
 
 /**
  * Returns Display(Parallelogram) from convex polygon.
+ * - Highly optimized display count, slow convert speed.
+ * - FIXME: DO NOT USE POLYGON BOOLEAN OPERATION
  * @param {Polygon} polygon
  * @param {Polygon} [boundaryPolygon=polygon]
  * @returns {Display}
- * @deprecated This function is no longer used.
+ * @deprecated This function is in development.
  */
 function convexToDisplay_slow(polygon, boundaryPolygon = polygon) {
   const totalArea = polygon.getArea();
