@@ -189,8 +189,8 @@ document.addEventListener("DOMContentLoaded", () => {
   convertButton.addEventListener("click", () => {
     if (!requireOriginalSVG()) return;
 
-    draw.findOne("#display-svg")?.remove();
-    draw.findOne("#polygon-svg")?.remove();
+    draw.findOne("#display-svg")?.clear();
+    draw.findOne("#polygon-svg")?.clear();
 
     convertToDisplay();
   });
@@ -276,7 +276,10 @@ document.addEventListener("DOMContentLoaded", () => {
       return false;
     }
     const sampleValue = samplerateSlider.value;
-    const polygonGroup = draw.group().id("polygon-svg");
+    const polygonGroup =
+      draw.findOne("#polygon-svg") ?? draw.group().id("polygon-svg");
+    const displayGroup =
+      draw.findOne("#display-svg") ?? draw.group().id("display-svg");
 
     const polygons = toPolygons(original, sampleValue);
     const displays = polygons.map((polygon) => toDisplay(polygon));
@@ -288,7 +291,7 @@ document.addEventListener("DOMContentLoaded", () => {
       drawPolygon(draw, poly).forEach((el) => polygonGroup.add(el));
     });
     // draw display
-    drawDisplay(draw, resultDisplay);
+    drawDisplay(draw, resultDisplay).forEach((el) => displayGroup.add(el));
 
     // update counts
     polygonCount.textContent = polygons.length;

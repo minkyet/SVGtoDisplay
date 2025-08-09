@@ -6,9 +6,10 @@ import { Display } from "./display.js";
  * @param {SVG.Container} draw
  * @param {Display} display
  * @param {SVG.G} group
+ * @returns {SVG.Path[]}
  */
-export function drawDisplay(draw, display, group = undefined) {
-  group ??= draw.findOne("#display-svg") ?? draw.group().id("display-svg");
+export function drawDisplay(draw, display) {
+  const elements = [];
 
   let d = "M";
   const vertices = display.getVertices().flat();
@@ -17,19 +18,18 @@ export function drawDisplay(draw, display, group = undefined) {
     if (i < vertices.length - 2) d += "L";
   }
   d += "Z";
-  const p = draw.path(d);
-  p.fill("none")
-    .stroke({
-      width: 0.1,
-      color: "#aff",
-    })
-    .addTo(group);
 
-  if (display.passengers.length > 0) {
-    display.passengers.forEach((passenger) =>
-      drawDisplay(draw, passenger, group)
-    );
-  }
+  const p = draw.path(d).fill("none").stroke({
+    width: 0.1,
+    color: "#aff",
+  });
+  elements.push(p);
+
+  elements.push(
+    ...display.passengers.flatMap((passenger) => drawDisplay(draw, passenger))
+  );
+
+  return elements;
 }
 
 /**
@@ -174,8 +174,8 @@ function sliceSamePoint(polygons) {
 }
 
 /**
- * Splits subpaths from a path string, ensuring each subpath is standalone.
- * Converts relative starting movetos ('m') to absolute ('M').
+ * Splits subpaths from a path string, ensuring each subpath is standalone and sanitized.
+ * Converts relative 'm' to absolute 'M' and ensures separators between all numbers.
  * @param {string} d
  * @returns {string[]}
  */
@@ -187,60 +187,74 @@ function splitSubpaths(d) {
 
   const result = [];
   let currentSubpath = "";
-  let cx = 0;
-  let cy = 0;
-  let startX = 0;
-  let startY = 0;
+
+  let cx = 0,
+    cy = 0;
+  let startX = 0,
+    startY = 0;
 
   for (const cmdStr of commands) {
     const commandChar = cmdStr[0];
-    const params = (cmdStr.substring(1).match(/-?[\d.]+/g) || []).map(
-      parseFloat
-    );
+    const paramsStr = cmdStr.substring(1).match(/-?[\d.]+/g) || [];
+    const params = paramsStr.map(parseFloat);
 
     if (commandChar === "M" || commandChar === "m") {
       if (currentSubpath) {
         result.push(currentSubpath.trim());
       }
 
-      // Convert 'm' (relative) command to 'M' (absolute) command
+      const firstPair = params.slice(0, 2);
       if (commandChar === "m") {
-        cx += params[0];
-        cy += params[1];
-        currentSubpath = `M ${cx} ${cy} `;
+        cx += firstPair[0];
+        cy += firstPair[1];
       } else {
-        cx = params[0];
-        cy = params[1];
-        currentSubpath = cmdStr + " ";
+        cx = firstPair[0];
+        cy = firstPair[1];
       }
+
+      currentSubpath = `M ${cx} ${cy}`;
+
       startX = cx;
       startY = cy;
 
-      // Handle cases where 'm' or 'M' comes with multiple coordinate pairs (e.g., M 10 10 20 20)
-      for (let i = 2; i < params.length; i += 2) {
-        if (commandChar === "m") {
-          cx += params[i];
-          cy += params[i + 1];
-          currentSubpath += `L ${cx} ${cy} `; // implicit Lineto
-        } else {
-          cx = params[i];
-          cy = params[i + 1];
-          currentSubpath += `L ${cx} ${cy} `; // implicit Lineto
+      if (params.length > 2) {
+        const remainingPoints = [];
+        for (let i = 2; i < params.length; i += 2) {
+          if (commandChar === "m") {
+            cx += params[i];
+            cy += params[i + 1];
+            remainingPoints.push(cx, cy);
+          } else {
+            cx = params[i];
+            cy = params[i + 1];
+            remainingPoints.push(cx, cy);
+          }
         }
+        currentSubpath += ` L ${remainingPoints.join(" ")}`;
       }
+      currentSubpath += " ";
     } else {
-      currentSubpath += cmdStr + " ";
+      if (params.length > 0) {
+        currentSubpath += commandChar + " " + paramsStr.join(" ") + " ";
+      } else {
+        currentSubpath += commandChar + " ";
+      }
 
-      // Update the last position of the pen for each command
       const pLen = params.length;
       switch (commandChar) {
         case "L":
         case "T":
+        case "S":
+        case "Q":
+        case "A":
           cx = params[pLen - 2];
           cy = params[pLen - 1];
           break;
         case "l":
         case "t":
+        case "s":
+        case "q":
+        case "a":
           cx += params[pLen - 2];
           cy += params[pLen - 1];
           break;
@@ -257,34 +271,15 @@ function splitSubpaths(d) {
           cy += params[pLen - 1];
           break;
         case "C":
-          cx = params[pLen - 4];
-          cy = params[pLen - 3];
+          cx = params[pLen - 2];
+          cy = params[pLen - 1];
           break;
         case "c":
-          cx += params[pLen - 4];
-          cy += params[pLen - 3];
-          break;
-        case "S":
-        case "Q":
-          cx = params[pLen - 2];
-          cy = params[pLen - 1];
-          break;
-        case "s":
-        case "q":
-          cx += params[pLen - 2];
-          cy += params[pLen - 1];
-          break;
-        case "A":
-          cx = params[pLen - 2];
-          cy = params[pLen - 1];
-          break;
-        case "a":
           cx += params[pLen - 2];
           cy += params[pLen - 1];
           break;
         case "Z":
         case "z":
-          // When a path is closed, the pen position returns to the starting point of the subpath.
           cx = startX;
           cy = startY;
           break;
@@ -292,7 +287,6 @@ function splitSubpaths(d) {
     }
   }
 
-  // Add the last processed subpath to the result
   if (currentSubpath) {
     result.push(currentSubpath.trim());
   }
