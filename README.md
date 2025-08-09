@@ -11,5 +11,5 @@
 - Polygonize the curve to the desired precision.
 - Set the block type or color you want.
 - Apply the colors of the original SVG to the text display.
-  > [!WARNING]
-  > Gradient colors are not applied.
+> [!WARNING]
+> Gradient colors are not applied.
