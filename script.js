@@ -40,9 +40,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const convertButton = $("convert-btn");
 
   const colorModeGroup = $("colormode-group");
-  const selectionInfo = $("selection-info");
-  const selectModeGroup = $("select-mode-group");
   const displayTypeGroup = $("display-type-group");
+  const blockDisplayRadio = $("block-display-radio");
+  const blockDisplayRadioTooltip = $("block-display-radio-tooltip");
 
   const blockWrapper = $("block-input-wrapper");
   const textWrapper = $("text-input-wrapper");
@@ -64,6 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const widthInput = $("width-input");
 
   const summonButton = $("summon-btn");
+  const summonButtonTooltip = $("summon-btn-tooltip");
 
   const draw = SVG().addTo(svgRenderArea).size("100%", "100%");
 
@@ -71,6 +72,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let resultDisplay = null;
   let pendingSVGFiles = null;
   let displayType = "block_display";
+  let colorMode = "Monochrome";
 
   // refresh warning
   window.addEventListener("beforeunload", (event) => {
@@ -96,28 +98,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // color mode button
   colorModeGroup.addEventListener("sl-input", (e) => {
-    selectionInfo.classList.toggle("hidden", Number(e.target.value) === 1);
-  });
-
-  // select mode button
-  selectModeGroup.addEventListener("sl-input", (e) => {
-    // TODO: select mode (monochrome/multicolor)
+    const selectedValue = Number(e.target.value);
+    if (selectedValue === 1) {
+      colorMode = "Monochrome";
+      blockDisplayRadio.removeAttribute("disabled");
+      blockDisplayRadioTooltip.setAttribute("disabled", "");
+      globalBlockType.removeAttribute("disabled");
+      globalColor.removeAttribute("disabled");
+    } else if (selectedValue === 2) {
+      colorMode = "MultiColor";
+      blockDisplayRadio.setAttribute("disabled", "");
+      blockDisplayRadioTooltip.removeAttribute("disabled");
+      globalBlockType.setAttribute("disabled", "");
+      globalColor.setAttribute("disabled", "");
+      displayTypeGroup.setAttribute("value", "2");
+      setDisplayType(2);
+    }
   });
 
   // display type button
   displayTypeGroup.addEventListener("sl-input", (e) => {
     const selectedValue = Number(e.target.value);
-    if (selectedValue === 1) {
-      displayType = "block_display";
-      depthInput.removeAttribute("disabled");
-      blockWrapper.classList.add("active");
-      textWrapper.classList.remove("active");
-    } else if (selectedValue === 2) {
-      displayType = "text_display";
-      depthInput.setAttribute("disabled", "");
-      blockWrapper.classList.remove("active");
-      textWrapper.classList.add("active");
-    }
+    setDisplayType(selectedValue);
   });
 
   sidebarToggleButton.addEventListener("click", () => {
@@ -253,9 +255,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (displayType === "block_display") {
       summonDisplay.setBlockType(globalBlockType.value);
       summonDisplay.setDepth(depthInput.value);
-    } else {
-      // TODO: color mode
-      // summonDisplay.setColor(globalColor.getFormattedValue("hex").slice(1));
+    } else if (colorMode === "Monochrome") {
+      summonDisplay.setColor(globalColor.getFormattedValue("hex").slice(1));
     }
     summonDisplay.move([-bboxPos[0], -bboxPos[1]]);
     summonDisplay.scale(widthInput.value / width);
@@ -303,6 +304,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // enable summon button
     summonButton.removeAttribute("disabled");
+    summonButtonTooltip.setAttribute("disabled", "");
   }
 
   function loadSVGFromFiles(files) {
@@ -339,6 +341,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function resetDisplayStats() {
     verticeCount.textContent = displayCount.textContent = "?";
     summonButton.setAttribute("disabled", "");
+    summonButtonTooltip.removeAttribute("disabled");
     Object.entries(toggleButtons).forEach(([selector, button]) => {
       button.name = "eye";
     });
@@ -411,5 +414,19 @@ document.addEventListener("DOMContentLoaded", () => {
       .fill("none")
       .stroke({ width: 0.5, color: "red", dasharray: "5,5" })
       .id("bbox-svg");
+  }
+
+  function setDisplayType(selectedValue) {
+    if (selectedValue === 1) {
+      displayType = "block_display";
+      depthInput.removeAttribute("disabled");
+      blockWrapper.classList.add("active");
+      textWrapper.classList.remove("active");
+    } else if (selectedValue === 2) {
+      displayType = "text_display";
+      depthInput.setAttribute("disabled", "");
+      blockWrapper.classList.remove("active");
+      textWrapper.classList.add("active");
+    }
   }
 });

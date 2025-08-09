@@ -86,7 +86,7 @@
 
                 <div class="sidebar-section file-info">
                     <p id="filename-label">No file loaded</p>
-                    <sl-tooltip content="Replace to another file">
+                    <sl-tooltip hoist content="Replace to another file">
                         <sl-button variant="primary" size="medium" circle id="reupload-btn" class="upload-btn">
                             <sl-icon name="arrow-clockwise"></sl-icon>
                         </sl-button>
@@ -114,32 +114,20 @@
                         <sl-radio-button value="1">
                             Monochrome
                         </sl-radio-button>
-                        <sl-tooltip content="Multicolor mode is in development.">
-                            <sl-radio-button value="2" disabled>
+                        <sl-tooltip placement="top-end" hoist content="Apply the original color.">
+                            <sl-radio-button value="2">
                                 Multicolor
                             </sl-radio-button>
                         </sl-tooltip>
                     </sl-radio-group>
                 </div>
 
-                <div class="sidebar-section hidden" id="selection-info">
-                    <sl-radio-group label="Select Mode" name="mode" value="1" id="select-mode-group">
-                        <sl-radio-button value="1">
-                            <sl-icon name="hand-index-thumb"></sl-icon>
-                        </sl-radio-button>
-                        <sl-radio-button value="2">
-                            <sl-icon name="eyedropper"></sl-icon>
-                        </sl-radio-button>
-                        <sl-radio-button value="3">
-                            <sl-icon name="check-all"></sl-icon>
-                        </sl-radio-button>
-                    </sl-radio-group>
-                    <div><span id="object-count">0</span> objects selected</div>
-                </div>
-
                 <div class="sidebar-section display-type">
                     <sl-radio-group label="Display type" name="type" value="1" id="display-type-group">
-                        <sl-radio value="1">Block display</sl-radio>
+                        <sl-tooltip placement="top-start" hoist disabled
+                            content="Multicolor mode is for Text display only." id="block-display-radio-tooltip">
+                            <sl-radio value="1" id="block-display-radio">Block display</sl-radio>
+                        </sl-tooltip>
                         <div id="block-input-wrapper" class="radio-extra active">
                             <sl-input placeholder="Block name" value="pink_concrete" id="global-block-type"></sl-input>
                         </div>
@@ -180,10 +168,13 @@
 
             </div>
             <div class="summon-button">
-                <sl-button id="summon-btn" variant="primary">
-                    <sl-icon name="box" slot="prefix"></sl-icon>
-                    Summon command
-                </sl-button>
+                <sl-tooltip placement="top-end" hoist content="You need to apply [Convert to Display] first."
+                    id="summon-btn-tooltip">
+                    <sl-button id="summon-btn" variant="primary">
+                        <sl-icon name="box" slot="prefix"></sl-icon>
+                        Summon command
+                    </sl-button>
+                </sl-tooltip>
             </div>
         </aside>
     </main>
