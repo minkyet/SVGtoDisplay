@@ -8,6 +8,7 @@ import { vec2 } from "./utils.js";
  * @returns {Display}
  */
 export function toDisplay(polygon) {
+  if (polygon.points < 3) return null;
   const convexes = convexDecomposition(polygon);
   const displays = convexes.reduce((acc, convex) => {
     try {
@@ -18,6 +19,7 @@ export function toDisplay(polygon) {
     }
     return acc;
   }, []);
+
   const result = Display.nestedDisplay(displays);
 
   result.setColor(polygon.color);

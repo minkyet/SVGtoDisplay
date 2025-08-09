@@ -86,6 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // samplerate slider
   samplerateSlider.tooltipFormatter = (value) => `${value}%`;
+  samplerateSlider.label = `Sample rate: ${samplerateSlider.value}%`;
   samplerateSlider.addEventListener("input", () => {
     const value = samplerateSlider.value;
     samplerateSlider.label = `Sample rate: ${value}%`;
@@ -283,7 +284,11 @@ document.addEventListener("DOMContentLoaded", () => {
       draw.findOne("#display-svg") ?? draw.group().id("display-svg");
 
     const polygons = toPolygons(original, sampleValue);
-    const displays = polygons.map((polygon) => toDisplay(polygon));
+    const displays = polygons.reduce((acc, polygon) => {
+      const display = toDisplay(polygon);
+      if (display) acc.push(display);
+      return acc;
+    }, []);
 
     resultDisplay = Display.nestedDisplay(displays);
 
