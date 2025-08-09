@@ -369,9 +369,9 @@ export class Polygon {
       const b = points[i];
       const c = points[(i + 1) % n];
 
-      const ab = [b[0] - a[0], b[1] - a[1]];
-      const bc = [c[0] - b[0], c[1] - b[1]];
-      const cross = ab[0] * bc[1] - ab[1] * bc[0];
+      const ab = vec2.sub(b, a);
+      const bc = vec2.sub(c, b);
+      const cross = vec2.cross(ab, bc);
 
       if (Math.abs(cross) > EPSILON) result.push(b);
     }

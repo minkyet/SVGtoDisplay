@@ -9,10 +9,20 @@ import { vec2 } from "./utils.js";
  */
 export function toDisplay(polygon) {
   const convexes = convexDecomposition(polygon);
-  const displays = convexes.map((convex) => convexToDisplay(convex, polygon));
+  const displays = convexes.reduce((acc, convex) => {
+    try {
+      const result = convexToDisplay(convex, polygon);
+      acc.push(result);
+    } catch (error) {
+      console.warn(error);
+    }
+    return acc;
+  }, []);
   const result = Display.nestedDisplay(displays);
+
   result.setColor(polygon.color);
   result.setLayer(polygon.layer);
+
   return result;
 }
 
@@ -248,6 +258,10 @@ function convexToDisplay(polygon, boundaryPolygon = polygon) {
   }
   if (!polygon.isConvex())
     throw new Error("Convex to Displays ERROR: input polygon is not convex.");
+  if (polygon.points.length < 3)
+    throw new Error(
+      "Convex to Displays ERROR: The number of input polygon points is less than 3."
+    );
 
   /** @type {Display[]} */
   const resultDisplays = [];
@@ -262,21 +276,24 @@ function convexToDisplay(polygon, boundaryPolygon = polygon) {
     const p2 = polygon.points[(i + 1) % length];
     const pA = vec2.add(p0, vec2.sub(p1, p2));
     const pC = vec2.add(p2, vec2.sub(p0, p1));
+
     if (
       boundaryPolygon.isSegmentInside(pA, p0) &&
       boundaryPolygon.isSegmentInside(pA, p1)
-    )
+    ) {
       resultDisplays.push(
         new Display(p0, [vec2.sub(p2, p0), vec2.sub(pA, p0)])
       );
-    else if (
+    } else if (
       boundaryPolygon.isSegmentInside(pC, p2) &&
       boundaryPolygon.isSegmentInside(pC, p0)
-    )
+    ) {
       resultDisplays.push(
         new Display(p2, [vec2.sub(p1, p2), vec2.sub(pC, p2)])
       );
-    else resultDisplays.push(...triangleToDisplays([p0, p1, p2]));
+    } else {
+      resultDisplays.push(...triangleToDisplays([p0, p1, p2]));
+    }
   }
 
   return Display.nestedDisplay(resultDisplays);

@@ -131,7 +131,9 @@ export function toPolygons(draw, sampleRate = 2) {
 
     // create Polygon instances
     for (const poly of merged) {
-      result.push(new Polygon(poly[0], poly.slice(1), fillColor, layer));
+      const points = Polygon.removeColinear(poly[0]);
+      const holes = poly.slice(1).map((hole) => Polygon.removeColinear(hole));
+      result.push(new Polygon(points, holes, fillColor, layer));
     }
   }
 
