@@ -78,68 +78,6 @@ export function drawPolygon(draw, polygon, options = {}) {
  * @param {number} [sampleRate=2]
  * @returns {Polygon[]}
  */
-// export function toPolygons(draw, sampleRate = 2) {
-//   const result = [];
-
-//   // include basic shape types + path + polygon
-//   const shapeSelectors = ["path", "polygon", "circle", "ellipse", "rect"];
-//   const elements = shapeSelectors.flatMap((sel) => draw.find(sel));
-
-//   for (let i = 0; i < elements.length; i++) {
-//     const layer = i;
-//     const el = elements[i];
-//     const fillColor = getComputedFill(el);
-//     if (!fillColor || fillColor === "none") continue;
-
-//     const subpaths = [];
-//     const polys = [];
-//     if (el.type === "path") {
-//       const d = el.attr("d");
-//       subpaths.push(...splitSubpaths(d));
-//     } else if (el.type === "polygon") {
-//       const pointsStr = el.attr("points");
-//       const points = pointsStr
-//         .trim()
-//         .split(/[\s,]+/)
-//         .reduce((acc, val, idx, arr) => {
-//           if (idx % 2 === 0)
-//             acc.push([parseFloat(arr[idx]), parseFloat(arr[idx + 1])]);
-//           return acc;
-//         }, []);
-//       if (points.length >= 3) {
-//         polys.push(points);
-//       }
-//     } else {
-//       // other shape types -> path
-//       const pathified = el.toPath(false);
-//       subpaths.push(...splitSubpaths(pathified.attr("d")));
-//       pathified.remove();
-//     }
-
-//     for (const subpath of subpaths) {
-//       const tempPath = draw.path(subpath);
-//       const polyfied = tempPath.toPoly(`${sampleRate}%`);
-//       tempPath.remove();
-//       const arr = polyfied.array();
-//       if (arr.length >= 3) {
-//         polys.push(arr);
-//       }
-//       polyfied.remove();
-//     }
-
-//     // xor merge
-//     const merged = xorPolygon(polys);
-
-//     // create Polygon instances
-//     for (const poly of merged) {
-//       const points = Polygon.removeColinear(poly[0]);
-//       const holes = poly.slice(1).map((hole) => Polygon.removeColinear(hole));
-//       result.push(new Polygon(points, holes, fillColor, layer));
-//     }
-//   }
-
-//   return result;
-// }
 export function toPolygons(draw, sampleRate = 2) {
   const result = [];
 
