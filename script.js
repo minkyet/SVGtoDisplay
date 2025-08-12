@@ -4,7 +4,7 @@ import { toDisplay } from "./geometry.js";
 
 const $ = (id) => document.getElementById(id);
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   fetch("config.json")
     .then((res) => res.json())
     .then((config) => {
@@ -85,6 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // samplerate slider
+  await samplerateSlider.updateComplete;
   samplerateSlider.tooltipFormatter = (value) => `${value}%`;
   samplerateSlider.label = `Sample rate: ${samplerateSlider.value}%`;
   samplerateSlider.addEventListener("input", () => {
@@ -344,7 +345,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function resetDisplayStats() {
-    verticeCount.textContent = displayCount.textContent = "?";
+    polygonCount.textContent =
+      verticeCount.textContent =
+      displayCount.textContent =
+        "?";
     summonButton.setAttribute("disabled", "");
     summonButtonTooltip.removeAttribute("disabled");
     Object.entries(toggleButtons).forEach(([selector, button]) => {
