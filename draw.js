@@ -224,9 +224,12 @@ function serializePathData(pathData) {
           parts.push(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.x, cmd.y);
           break;
         case "S":
+          parts.push(cmd.x2, cmd.y2, cmd.x, cmd.y);
+          break;
         case "Q":
           parts.push(cmd.x1, cmd.y1, cmd.x, cmd.y);
           break;
+
         case "A":
           parts.push(
             cmd.rx,
@@ -283,12 +286,6 @@ function sliceSamePoint(polygons) {
 }
 
 /**
- * Splits subpaths from a path string, ensuring each subpath is standalone and sanitized.
- * Converts relative 'm' to absolute 'M' and ensures separators between all numbers.
- * @param {string} d
- * @returns {string[]}
- */
-/**
  * Splits subpaths from a path string using the svg-path-parser library.
  * The returned subpaths are standalone (start with absolute 'M') and sanitized.
  * @param {string} d
@@ -323,120 +320,6 @@ function splitSubpaths(d) {
     return [];
   }
 }
-// function splitSubpaths(d) {
-//   if (typeof d !== "string") return [];
-
-//   const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g) || [];
-//   if (commands.length === 0) return [];
-
-//   const result = [];
-//   let currentSubpath = "";
-
-//   let cx = 0,
-//     cy = 0;
-//   let startX = 0,
-//     startY = 0;
-
-//   for (const cmdStr of commands) {
-//     const commandChar = cmdStr[0];
-//     const paramsStr = cmdStr.substring(1).match(/-?[\d.]+/g) || [];
-//     const params = paramsStr.map(parseFloat);
-
-//     if (commandChar === "M" || commandChar === "m") {
-//       if (currentSubpath) {
-//         result.push(currentSubpath.trim());
-//       }
-
-//       const firstPair = params.slice(0, 2);
-//       if (commandChar === "m") {
-//         cx += firstPair[0];
-//         cy += firstPair[1];
-//       } else {
-//         cx = firstPair[0];
-//         cy = firstPair[1];
-//       }
-
-//       currentSubpath = `M ${cx} ${cy}`;
-
-//       startX = cx;
-//       startY = cy;
-
-//       if (params.length > 2) {
-//         const remainingPoints = [];
-//         for (let i = 2; i < params.length; i += 2) {
-//           if (commandChar === "m") {
-//             cx += params[i];
-//             cy += params[i + 1];
-//             remainingPoints.push(cx, cy);
-//           } else {
-//             cx = params[i];
-//             cy = params[i + 1];
-//             remainingPoints.push(cx, cy);
-//           }
-//         }
-//         currentSubpath += ` L ${remainingPoints.join(" ")}`;
-//       }
-//       currentSubpath += " ";
-//     } else {
-//       if (params.length > 0) {
-//         currentSubpath += commandChar + " " + paramsStr.join(" ") + " ";
-//       } else {
-//         currentSubpath += commandChar + " ";
-//       }
-
-//       const pLen = params.length;
-//       switch (commandChar) {
-//         case "L":
-//         case "T":
-//         case "S":
-//         case "Q":
-//         case "A":
-//           cx = params[pLen - 2];
-//           cy = params[pLen - 1];
-//           break;
-//         case "l":
-//         case "t":
-//         case "s":
-//         case "q":
-//         case "a":
-//           cx += params[pLen - 2];
-//           cy += params[pLen - 1];
-//           break;
-//         case "H":
-//           cx = params[pLen - 1];
-//           break;
-//         case "h":
-//           cx += params[pLen - 1];
-//           break;
-//         case "V":
-//           cy = params[pLen - 1];
-//           break;
-//         case "v":
-//           cy += params[pLen - 1];
-//           break;
-//         case "C":
-//           cx = params[pLen - 2];
-//           cy = params[pLen - 1];
-//           break;
-//         case "c":
-//           cx += params[pLen - 2];
-//           cy += params[pLen - 1];
-//           break;
-//         case "Z":
-//         case "z":
-//           cx = startX;
-//           cy = startY;
-//           break;
-//       }
-//     }
-//   }
-
-//   if (currentSubpath) {
-//     result.push(currentSubpath.trim());
-//   }
-
-//   return result;
-// }
 
 function rgbToHex(rgb) {
   const match = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
@@ -453,9 +336,4 @@ function getComputedFill(el) {
   const node = el.node;
   const fill = window.getComputedStyle(node).fill;
   return rgbToHex(fill);
-}
-
-function getLayerIndex(el) {
-  const siblings = el.parent().children();
-  return siblings.indexOf(el);
 }
