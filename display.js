@@ -166,7 +166,7 @@ export class Display {
    * @param {number} offset
    * @returns {number}
    */
-  getZOffset(offset = 0.001) {
+  getZOffset(offset = 0.0048828125) {
     return this.layer * offset;
   }
 
